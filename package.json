@@ -12,18 +12,24 @@
     "start": "node server/index.js"
   },
   "dependencies": {
+    "@google/genai": "^2.6.0",
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
+    "drizzle-zod": "^0.8.3",
     "express": "^5.1.0",
     "lucide-react": "^0.511.0",
+    "p-limit": "^7.3.0",
+    "p-retry": "^7.1.1",
     "pg": "^8.13.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.1",
     "recharts": "^2.15.3",
-    "twilio": "^5.7.2"
+    "twilio": "^5.7.2",
+    "zod": "^4.4.3",
+    "zod-validation-error": "^5.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.8",
