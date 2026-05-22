@@ -13,7 +13,7 @@ const webhookRoutes = require('./routes/webhook');
 const systemRoutes = require('./routes/system');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.API_PORT || 3000;
 const distPath = path.join(__dirname, '..', 'dist');
 
 app.use(cors());

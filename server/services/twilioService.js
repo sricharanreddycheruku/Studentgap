@@ -2,7 +2,10 @@ const twilio = require('twilio');
 const Message = require('../models/Message');
 
 const isMockMode = () => String(process.env.USE_MOCK_WHATSAPP).toLowerCase() === 'true';
-const whatsappAddress = (number = '') => number.startsWith('whatsapp:') ? number : `whatsapp:${number}`;
+const whatsappAddress = (number = '') => {
+  const digits = String(number).replace('whatsapp:', '').replace(/^\+/, '');
+  return `whatsapp:+${digits}`;
+};
 
 const persistMessage = async ({ student, sessionId, type, content, deliveryMode, status }) => Message.create({
   studentId: student._id,
