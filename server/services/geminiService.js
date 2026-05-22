@@ -1,4 +1,3 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fallbackQuestions = require('../utils/fallbackQuestions');
 const { safeJsonParse, stripMarkdownBackticks } = require('../utils/safeJsonParse');
 
@@ -53,19 +52,32 @@ const fallbackAnalysis = (topic, questions, responses) => {
   };
 };
 
-const getModel = () => {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured.');
+const getAI = () => {
+  // Use Replit AI Integration proxy if available, else fall back to direct key
+  if (process.env.AI_INTEGRATIONS_GEMINI_API_KEY && process.env.AI_INTEGRATIONS_GEMINI_BASE_URL) {
+    const { GoogleGenAI } = require('@google/genai');
+    return new GoogleGenAI({
+      apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+      httpOptions: {
+        apiVersion: '',
+        baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
+      },
+    });
   }
-
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  return genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  if (process.env.GEMINI_API_KEY) {
+    const { GoogleGenAI } = require('@google/genai');
+    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  throw new Error('No Gemini API key configured. Please set GEMINI_API_KEY.');
 };
 
 const askGemini = async (prompt) => {
-  const model = getModel();
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  const ai = getAI();
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents: prompt,
+  });
+  return response.text;
 };
 
 const generateQuestions = async (topic, subject, grade, language = 'English') => {
