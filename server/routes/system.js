@@ -19,18 +19,16 @@ const getBaseUrl = (req) => {
 };
 
 router.get('/status', (req, res) => {
-  const metaConfigured = Boolean(
-    process.env.WHATSAPP_TOKEN
-    && process.env.WHATSAPP_PHONE_NUMBER_ID
+  const greenApiConfigured = Boolean(
+    process.env.GREENAPI_INSTANCE_ID && process.env.GREENAPI_API_TOKEN
   );
   const mockWhatsapp = String(process.env.USE_MOCK_WHATSAPP).toLowerCase() === 'true';
   const baseUrl = getBaseUrl(req);
   const webhookPath = '/api/webhook/whatsapp';
-  const missingMeta = [
-    ['WHATSAPP_TOKEN', process.env.WHATSAPP_TOKEN],
-    ['WHATSAPP_PHONE_NUMBER_ID', process.env.WHATSAPP_PHONE_NUMBER_ID],
-    ['WHATSAPP_VERIFY_TOKEN', process.env.WHATSAPP_VERIFY_TOKEN]
-  ].filter(([, value]) => !value).map(([key]) => key);
+  const missing = [
+    ['GREENAPI_INSTANCE_ID', process.env.GREENAPI_INSTANCE_ID],
+    ['GREENAPI_API_TOKEN', process.env.GREENAPI_API_TOKEN]
+  ].filter(([, v]) => !v).map(([k]) => k);
 
   return res.json({
     success: true,
@@ -38,10 +36,10 @@ router.get('/status', (req, res) => {
       api: 'online',
       database: Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL),
       geminiConfigured: Boolean(process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY),
-      whatsappMode: mockWhatsapp ? 'mock' : 'meta',
-      metaConfigured,
-      realWhatsappReady: !mockWhatsapp && metaConfigured,
-      missingMeta,
+      whatsappMode: mockWhatsapp ? 'mock' : 'greenapi',
+      greenApiConfigured,
+      realWhatsappReady: !mockWhatsapp && greenApiConfigured,
+      missing,
       webhookPath,
       webhookUrl: `${baseUrl}${webhookPath}`
     }

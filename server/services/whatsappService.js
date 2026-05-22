@@ -8,34 +8,30 @@ const normalizePhone = (number = '') =>
 const persistMessage = async ({ student, sessionId, type, content, deliveryMode, status }) =>
   Message.create({ studentId: student._id, sessionId, type, content, deliveryMode, status });
 
-const sendMetaMessage = async (toPhone, content) => {
-  const token = process.env.WHATSAPP_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+// Green API — free tier, connects via QR code to your personal WhatsApp
+const sendGreenApiMessage = async (toPhone, content) => {
+  const instanceId = process.env.GREENAPI_INSTANCE_ID;
+  const apiToken = process.env.GREENAPI_API_TOKEN;
 
-  if (!token || !phoneNumberId) {
-    throw new Error('WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set.');
+  if (!instanceId || !apiToken) {
+    throw new Error('GREENAPI_INSTANCE_ID and GREENAPI_API_TOKEN must be set.');
   }
 
   const to = normalizePhone(toPhone);
-  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+  const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: `+${to}`,
-      type: 'text',
-      text: { body: content },
+      chatId: `${to}@c.us`,
+      message: content,
     }),
   });
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Meta API error ${response.status}: ${err}`);
+    throw new Error(`Green API error ${response.status}: ${err}`);
   }
 
   return response.json();
@@ -49,11 +45,11 @@ const deliverMessage = async ({ student, sessionId, type, content }) => {
 
   try {
     console.log(`[whatsapp] Sending ${type} message to ${student.name}.`);
-    await sendMetaMessage(student.phone, content);
-    return persistMessage({ student, sessionId, type, content, deliveryMode: 'meta', status: 'sent' });
+    await sendGreenApiMessage(student.phone, content);
+    return persistMessage({ student, sessionId, type, content, deliveryMode: 'greenapi', status: 'sent' });
   } catch (error) {
     console.error(`[whatsapp] ${type} delivery failed for ${student.name}:`, error.message);
-    return persistMessage({ student, sessionId, type, content, deliveryMode: 'meta', status: 'pending' });
+    return persistMessage({ student, sessionId, type, content, deliveryMode: 'greenapi', status: 'pending' });
   }
 };
 
