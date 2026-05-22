@@ -1,0 +1,36 @@
+{
+  "name": "classpulse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "nodemon server/index.js",
+    "client": "vite --config client/vite.config.mjs",
+    "seed": "node server/seed.js",
+    "build": "vite build --config client/vite.config.mjs",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.9.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "lucide-react": "^0.511.0",
+    "pg": "^8.13.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.1",
+    "recharts": "^2.15.3",
+    "twilio": "^5.7.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.8",
+    "@vitejs/plugin-react": "^4.5.0",
+    "concurrently": "^9.1.2",
+    "nodemon": "^3.1.10",
+    "tailwindcss": "4.1.8",
+    "vite": "^6.3.5"
+  }
+}
