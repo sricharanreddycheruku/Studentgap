@@ -1,43 +1,117 @@
-import { MessageCircleMore } from 'lucide-react';
+import { MessageCircle, Wifi, WifiOff } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
-const LiveResponseFeed = ({ responses = [], messages = [] }) => {
-  const acknowledgementCount = messages.filter((message) => message.type === 'acknowledgement').length;
+const LiveResponseFeed = ({ responses = [], messages = [], isLive = false }) => {
+  const [newIds, setNewIds] = useState(new Set());
+  const prevCountRef = useRef(responses.length);
+  const feedRef = useRef(null);
+
+  useEffect(() => {
+    const prevCount = prevCountRef.current;
+    const currentCount = responses.length;
+    if (currentCount > prevCount) {
+      const incoming = responses.slice(-(currentCount - prevCount));
+      const ids = incoming.map((r) => `${r.studentId?._id || r.studentId}-${r.submittedAt}`);
+      setNewIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.add(id));
+        return next;
+      });
+      setTimeout(() => {
+        setNewIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id) => next.delete(id));
+          return next;
+        });
+      }, 2500);
+      if (feedRef.current) {
+        feedRef.current.scrollTop = 0;
+      }
+    }
+    prevCountRef.current = currentCount;
+  }, [responses]);
+
+  const acknowledgementCount = messages.filter((m) => m.type === 'acknowledgement').length;
 
   return (
-    <section className="panel rounded-lg p-5">
-      <div className="flex items-center justify-between gap-3">
+    <section className="panel rounded-xl p-5 flex flex-col">
+      <div className="flex items-center justify-between gap-3 mb-4">
         <div>
-          <p className="text-sm font-bold uppercase text-slate-500">Live feed</p>
-          <h2 className="mt-1 text-xl font-black">Student replies</h2>
+          <p className="text-xs font-black uppercase tracking-wider text-slate-400">Live feed</p>
+          <h2 className="mt-1 text-lg font-black text-[#11233f]">Student replies</h2>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">
-          <MessageCircleMore size={17} aria-hidden="true" />
-          {acknowledgementCount} acknowledged
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600">
+            <MessageCircle size={13} />
+            {acknowledgementCount} ack'd
+          </span>
+          {isLive ? (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <Wifi size={13} />
+              Live
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-500">
+              <WifiOff size={13} />
+              Polling
+            </span>
+          )}
+        </div>
       </div>
-      <div className="mt-4 space-y-3">
+
+      <div ref={feedRef} className="flex-1 space-y-2.5 overflow-y-auto max-h-80 pr-1">
         {!responses.length && (
-          <p className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-            Responses will appear here as WhatsApp replies reach the active session.
-          </p>
+          <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center">
+            <MessageCircle size={28} className="mx-auto text-slate-200 mb-2" />
+            <p className="text-sm font-semibold text-slate-400">Waiting for WhatsApp replies…</p>
+            <p className="mt-1 text-xs text-slate-300">Responses appear here instantly</p>
+          </div>
         )}
-        {responses.slice().reverse().map((response) => (
-          <article key={`${response.studentId?._id || response.studentId}-${response.submittedAt}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-black">{response.studentId?.name || 'Student'}</p>
-              <time className="text-xs font-semibold text-slate-500">
-                {response.submittedAt ? new Date(response.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
-              </time>
-            </div>
-            <div className="mt-3 space-y-2 text-sm text-slate-600">
-              {(response.answers || []).map((answer, index) => (
-                <p key={`${answer}-${index}`} className="rounded-md bg-white px-3 py-2">
-                  <span className="font-bold text-slate-400">A{index + 1}</span> {answer}
-                </p>
-              ))}
-            </div>
-          </article>
-        ))}
+        {responses.slice().reverse().map((response) => {
+          const key = `${response.studentId?._id || response.studentId}-${response.submittedAt}`;
+          const isNew = newIds.has(key);
+          return (
+            <article
+              key={key}
+              className={`rounded-xl border p-3.5 transition-all duration-500 ${
+                isNew
+                  ? 'border-emerald-300 bg-emerald-50 shadow-md shadow-emerald-100'
+                  : 'border-slate-200 bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-[#11233f] text-xs font-black text-white shrink-0">
+                    {(response.studentId?.name || 'S').charAt(0).toUpperCase()}
+                  </span>
+                  <p className="font-black text-[#11233f] text-sm">{response.studentId?.name || 'Student'}</p>
+                  {isNew && (
+                    <span className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-black text-white uppercase tracking-wide">
+                      New
+                    </span>
+                  )}
+                </div>
+                <time className="text-[11px] font-semibold text-slate-400 shrink-0">
+                  {response.submittedAt
+                    ? new Date(response.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : 'Just now'}
+                </time>
+              </div>
+              <div className="space-y-1.5">
+                {(response.answers || []).map((answer, index) => (
+                  <p
+                    key={`${answer}-${index}`}
+                    className="rounded-lg bg-white px-3 py-1.5 text-sm text-slate-700 border border-slate-100"
+                  >
+                    <span className="font-black text-slate-400 mr-1.5">A{index + 1}</span>
+                    {answer}
+                  </p>
+                ))}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
