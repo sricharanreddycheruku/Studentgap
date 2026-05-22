@@ -37,10 +37,18 @@ const receiveWhatsappResponse = async (req, res) => {
     const { typeWebhook, senderData, messageData } = req.body || {};
 
     if (typeWebhook !== 'incomingMessageReceived') return;
-    if (messageData?.typeMessage !== 'textMessage') return;
+
+    const msgType = messageData?.typeMessage;
+    if (!['textMessage', 'quotedMessage', 'extendedTextMessage'].includes(msgType)) return;
 
     const from = normalizePhone(senderData?.chatId || senderData?.sender || '');
-    const body = String(messageData?.textMessageData?.textMessage || '').trim();
+    // Handle plain text, quoted replies, and extended text messages
+    const body = String(
+      messageData?.textMessageData?.textMessage ||
+      messageData?.extendedTextMessageData?.text ||
+      messageData?.quotedMessage?.textMessage ||
+      ''
+    ).trim();
 
     console.log(`[webhook] Incoming WhatsApp from: ${from}`);
     if (!from || !body) return;
