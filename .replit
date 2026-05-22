@@ -42,7 +42,7 @@ externalPort = 80
 
 [userenv.shared]
 PORT = "3000"
-USE_MOCK_WHATSAPP = "true"
+USE_MOCK_WHATSAPP = "false"
 
 [deployment]
 deploymentTarget = "autoscale"
