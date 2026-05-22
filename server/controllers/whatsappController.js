@@ -1,6 +1,7 @@
 const Session = require('../models/Session');
 const Student = require('../models/Student');
 const Message = require('../models/Message');
+const { broadcast } = require('../services/sseService');
 
 const ACKNOWLEDGEMENT = 'Response received! Your teacher will review and share personalised feedback soon. Keep it up! 👍';
 
@@ -105,6 +106,16 @@ const receiveWhatsappResponse = async (req, res) => {
       deliveryMode: 'greenapi',
       status: 'sent',
       content: ACKNOWLEDGEMENT
+    });
+
+    const populated = await Session.findById(session._id)
+      .populate('teacherId', 'name subject grade language')
+      .populate('responses.studentId', 'name phone riskLevel confidenceLevel');
+
+    broadcast(String(session._id), 'response', {
+      sessionId: String(session._id),
+      responses: populated.responses,
+      responseCount: populated.responses.length
     });
 
     console.log(`[webhook] Stored response from ${student.name} for ${session.topic}.`);
