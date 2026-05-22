@@ -3,25 +3,25 @@ import { useCallback, useEffect, useState } from 'react';
 import api from '../api/axios';
 
 const Signal = ({ label, ready, detail }) => (
-  <div className={`flex items-center justify-between rounded-xl border p-4 ${
+  <div className={`flex items-center justify-between rounded-xl border p-4 transition ${
     ready ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'
   }`}>
     <div>
-      <p className={`font-black ${ready ? 'text-emerald-800' : 'text-amber-900'}`}>{label}</p>
+      <p className={`font-black text-sm ${ready ? 'text-emerald-800' : 'text-amber-900'}`}>{label}</p>
       {detail && <p className={`mt-0.5 text-xs ${ready ? 'text-emerald-600' : 'text-amber-700'}`}>{detail}</p>}
     </div>
     {ready
-      ? <CheckCircle2 size={20} className="text-emerald-600 shrink-0" />
-      : <TriangleAlert size={20} className="text-amber-600 shrink-0" />
+      ? <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+      : <TriangleAlert size={18} className="text-amber-500 shrink-0" />
     }
   </div>
 );
 
 const Step = ({ num, title, children }) => (
   <div className="flex gap-4">
-    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#11233f] text-sm font-black text-white">{num}</span>
-    <div className="min-w-0 pb-6 border-b border-slate-100 last:border-0">
-      <h3 className="font-black text-[#11233f]">{title}</h3>
+    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#11233f] text-xs font-black text-white mt-0.5">{num}</span>
+    <div className="min-w-0 pb-5 border-b border-slate-100 last:border-0 w-full">
+      <h3 className="font-black text-[#11233f] text-sm">{title}</h3>
       <div className="mt-2 text-sm leading-6 text-slate-600 space-y-2">{children}</div>
     </div>
   </div>
@@ -66,7 +66,7 @@ const WhatsAppSetup = () => {
           <p className="text-xs font-black uppercase tracking-wider text-blue-600">WhatsApp</p>
           <h1 className="mt-1 text-3xl font-black text-[#11233f]">WhatsApp setup</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Connect Twilio to send real MCQs to students and receive their answers.
+            Using <strong>Green API</strong> — free WhatsApp delivery via QR scan. No paid plan needed.
           </p>
         </div>
         <button
@@ -92,36 +92,36 @@ const WhatsAppSetup = () => {
       {!loading && status && (
         <>
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Signal label="API" detail="Backend online" ready={status.api === 'online'} />
+            <Signal label="API server" detail="Backend online" ready={status.api === 'online'} />
             <Signal label="Database" detail="PostgreSQL connected" ready={status.database} />
             <Signal
               label="AI (Gemini)"
-              detail={status.geminiConfigured ? 'Key configured' : 'GEMINI_API_KEY missing'}
+              detail={status.geminiConfigured ? 'Gemini 2.5 Flash ready' : 'GEMINI_API_KEY missing'}
               ready={status.geminiConfigured}
             />
             <Signal
-              label={status.whatsappMode === 'twilio' ? 'Twilio live' : 'Mock mode'}
-              detail={status.whatsappMode === 'twilio' ? 'Real WhatsApp active' : 'USE_MOCK_WHATSAPP=true'}
-              ready={status.whatsappMode === 'mock' || status.twilioConfigured}
+              label="Green API"
+              detail={status.greenApiConfigured ? 'Instance configured' : 'Credentials missing'}
+              ready={status.greenApiConfigured}
             />
           </section>
 
           {status.whatsappMode === 'mock' && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-              <p className="font-black text-blue-800">Currently in Mock mode</p>
-              <p className="mt-1 text-sm text-blue-700">
-                Questions and feedback are logged but not sent to real phones. Complete the steps below to enable real WhatsApp delivery.
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="font-black text-amber-800">Mock mode active</p>
+              <p className="mt-1 text-sm text-amber-700">
+                Messages are logged but not sent to real phones. Set <code className="rounded bg-amber-100 px-1">USE_MOCK_WHATSAPP=false</code> and add Green API credentials to enable real delivery.
               </p>
             </div>
           )}
 
-          {status.whatsappMode === 'twilio' && status.twilioConfigured && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3">
+          {status.greenApiConfigured && status.whatsappMode !== 'mock' && (
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <CheckCircle2 size={20} className="text-emerald-600 shrink-0" />
               <div>
-                <p className="font-black text-emerald-800">Real WhatsApp is active!</p>
+                <p className="font-black text-emerald-800">Green API is active!</p>
                 <p className="mt-0.5 text-sm text-emerald-700">
-                  Sender: <strong>{status.sender}</strong> · Messages are sent to real phones.
+                  Real WhatsApp messages are being sent and received.
                 </p>
               </div>
             </div>
@@ -131,11 +131,11 @@ const WhatsAppSetup = () => {
             <div className="panel rounded-xl p-5">
               <div className="flex items-center gap-3 mb-4">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100 text-emerald-700">
-                  <MessageCircleMore size={19} />
+                  <MessageCircleMore size={18} />
                 </span>
                 <div>
                   <p className="text-xs font-black uppercase tracking-wider text-slate-400">Webhook URL</p>
-                  <h2 className="font-black text-[#11233f]">Paste in Twilio</h2>
+                  <h2 className="font-black text-[#11233f] text-sm">Paste in Green API dashboard</h2>
                 </div>
               </div>
 
@@ -151,69 +151,48 @@ const WhatsAppSetup = () => {
                   }`}
                   title="Copy URL"
                 >
-                  {copied ? <CheckCircle2 size={16} /> : <ClipboardCopy size={16} />}
+                  {copied ? <CheckCircle2 size={15} /> : <ClipboardCopy size={15} />}
                 </button>
               </div>
 
               <div className="mt-3 space-y-1 text-xs text-slate-500">
-                <p>· In Twilio sandbox: <strong>When a message comes in</strong></p>
-                <p>· Method: <strong>POST</strong></p>
-                <p>· This URL handles incoming student WhatsApp replies</p>
+                <p>· Green API Dashboard → Instance → <strong>Notifications</strong></p>
+                <p>· Paste URL in <strong>Webhook</strong> field</p>
+                <p>· Enable <strong>incomingMessageReceived</strong></p>
               </div>
-
-              {status.missingTwilio?.length > 0 && (
-                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs font-black text-amber-800 mb-1">Missing secrets:</p>
-                  {status.missingTwilio.map((key) => (
-                    <p key={key} className="text-xs font-mono text-amber-700">· {key}</p>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="panel rounded-xl p-5">
               <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-4">Setup guide</p>
               <div className="space-y-0">
-                <Step num="1" title="Create a Twilio account">
-                  <p>Sign up at <a href="https://twilio.com" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">twilio.com <ExternalLink size={12} /></a>. Free trial gives $15 credit — enough to test with dozens of students.</p>
+                <Step num="1" title="Create a Green API account">
+                  <p>Sign up free at <a href="https://green-api.com" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">green-api.com <ExternalLink size={11} /></a>. The free Developer plan allows real WhatsApp delivery.</p>
                 </Step>
 
-                <Step num="2" title="Activate WhatsApp Sandbox">
-                  <p>In your Twilio console, go to <strong>Messaging → Try it out → Send a WhatsApp message</strong>. Follow instructions to join the sandbox with your phone.</p>
+                <Step num="2" title="Create an instance and scan QR">
+                  <p>In your Green API console, create a new instance. Open it and scan the QR code with your WhatsApp — this links your WhatsApp number to the API.</p>
                 </Step>
 
-                <Step num="3" title="Add secrets to Replit">
-                  <p>Open the <strong>Secrets</strong> tab in Replit and add these three values:</p>
+                <Step num="3" title="Add credentials to Replit Secrets">
+                  <p>Open the <strong>Secrets</strong> tab in Replit and add:</p>
                   <div className="rounded-lg bg-slate-900 p-3 font-mono text-xs text-emerald-300 space-y-1">
-                    <p>TWILIO_ACCOUNT_SID=ACxxxxxxx</p>
-                    <p>TWILIO_AUTH_TOKEN=xxxxxxxx</p>
-                    <p>TWILIO_WHATSAPP_NUMBER=+14155238886</p>
-                  </div>
-                  <p className="text-slate-500">Find your Account SID and Auth Token on the Twilio Console homepage. The WhatsApp number is shown in your sandbox settings.</p>
-                </Step>
-
-                <Step num="4" title="Set USE_MOCK_WHATSAPP to false">
-                  <p>In Replit Secrets, add or update:</p>
-                  <div className="rounded-lg bg-slate-900 p-3 font-mono text-xs text-emerald-300">
+                    <p>GREENAPI_INSTANCE_ID=your-instance-id</p>
+                    <p>GREENAPI_API_TOKEN=your-api-token</p>
                     <p>USE_MOCK_WHATSAPP=false</p>
                   </div>
-                  <p>Then restart the workflow for changes to take effect.</p>
+                  <p className="text-slate-500">Find these in your Green API instance dashboard under <strong>API</strong> tab.</p>
                 </Step>
 
-                <Step num="5" title="Configure the webhook in Twilio">
-                  <p>In your Twilio sandbox settings, paste the webhook URL (left panel) into the <strong>"When a message comes in"</strong> field. Set method to <strong>POST</strong>.</p>
+                <Step num="4" title="Set the webhook URL">
+                  <p>In Green API → your instance → <strong>Notifications</strong> tab, paste the webhook URL (left panel). Enable <strong>incomingMessageReceived</strong> and save.</p>
                 </Step>
 
-                <Step num="6" title="Add student phone numbers with country code">
-                  <p>In the Roster page, enter student numbers including country code: <strong>+919876543210</strong> for India (91 + 10 digits). Students who WhatsApp back from that number are matched automatically.</p>
+                <Step num="5" title="Add students with their phone numbers">
+                  <p>In the Roster page, enter numbers with country code — e.g. <strong>919876543210</strong> for India. When students reply on WhatsApp, they're matched automatically.</p>
                 </Step>
 
-                <Step num="7" title="Enable Gemini AI (optional but recommended)">
-                  <p>Add your Gemini API key to Replit Secrets:</p>
-                  <div className="rounded-lg bg-slate-900 p-3 font-mono text-xs text-emerald-300">
-                    <p>GEMINI_API_KEY=AIzaSyxxxxxx</p>
-                  </div>
-                  <p>Get a free key at <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">aistudio.google.com <ExternalLink size={12} /></a>. Without it, fallback questions are used.</p>
+                <Step num="6" title="Run a session">
+                  <p>Go to <strong>New Session</strong>, pick a topic, click <strong>Send via WhatsApp</strong>. Students receive questions and their replies appear live on the Session Results page.</p>
                 </Step>
               </div>
             </div>
