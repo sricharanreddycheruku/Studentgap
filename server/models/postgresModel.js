@@ -217,6 +217,14 @@ class PostgresModel {
     return created;
   }
 
+  async deleteOne(filter = {}) {
+    const existing = await this.findOne(filter).lean();
+    if (!existing) return { deletedCount: 0 };
+    const id = asId(existing._id);
+    const result = await query(`DELETE FROM ${this.table} WHERE id = $1::uuid`, [id]);
+    return { deletedCount: result.rowCount };
+  }
+
   async deleteMany(filter = {}) {
     const { clause, params } = buildWhere(filter, this.columns);
     const result = await query(`DELETE FROM ${this.table}${clause ? ` WHERE ${clause}` : ''}`, params);
@@ -233,7 +241,20 @@ class PostgresModel {
     const existing = await this.findOne(filter).lean();
 
     if (existing) {
-      return { matchedCount: 1, modifiedCount: 0, upsertedId: null };
+      const data = this._prepare({ ...existing, ...(update.$set || update) });
+      const id = asId(existing._id);
+      const keys = Object.keys(this.columns).filter((key) => key !== '_id' && data[key] !== undefined);
+      const params = [];
+      const assignments = keys.map((key) => {
+        params.push(this._dbValue(key, data[key]));
+        return `${this.columns[key]} = $${params.length}${this.jsonColumns.has(key) ? '::jsonb' : ''}`;
+      });
+      params.push(id);
+      await query(
+        `UPDATE ${this.table} SET ${assignments.join(', ')} WHERE id = $${params.length}::uuid`,
+        params
+      );
+      return { matchedCount: 1, modifiedCount: 1, upsertedId: null };
     }
 
     if (!options.upsert) {

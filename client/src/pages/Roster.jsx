@@ -1,4 +1,4 @@
-import { Loader2, Phone, Plus, School, Send, Trash2, Users } from 'lucide-react';
+import { Loader2, Pencil, Phone, Plus, School, Send, Trash2, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
@@ -25,6 +25,10 @@ const Roster = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [editStudent, setEditStudent] = useState(null);
+  const [editForm, setEditForm] = useState(emptyStudent);
+  const [editPhoneError, setEditPhoneError] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   const selectedTeacher = useMemo(
     () => teachers.find((t) => t._id === teacherId),
@@ -76,15 +80,55 @@ const Roster = () => {
     if (field === 'phone') {
       const stripped = value.replace(/[^0-9+]/g, '');
       const digits = stripped.replace(/^\+/, '');
-      if (digits.length > 0 && (digits.length < 7 || digits.length > 15)) {
-        setPhoneError('Enter 7–15 digits with country code (e.g. 919876543210 for India)');
-      } else {
-        setPhoneError('');
-      }
+      setPhoneError(digits.length > 0 && (digits.length < 7 || digits.length > 15)
+        ? 'Enter 7–15 digits with country code (e.g. 919876543210 for India)'
+        : '');
       setForm((curr) => ({ ...curr, [field]: stripped }));
       return;
     }
     setForm((curr) => ({ ...curr, [field]: value }));
+  };
+
+  const updateEditForm = (field, value) => {
+    if (field === 'phone') {
+      const stripped = value.replace(/[^0-9+]/g, '');
+      const digits = stripped.replace(/^\+/, '');
+      setEditPhoneError(digits.length > 0 && (digits.length < 7 || digits.length > 15)
+        ? 'Enter 7–15 digits with country code (e.g. 919876543210 for India)'
+        : '');
+      setEditForm((curr) => ({ ...curr, [field]: stripped }));
+      return;
+    }
+    setEditForm((curr) => ({ ...curr, [field]: value }));
+  };
+
+  const openEdit = (student) => {
+    setEditStudent(student);
+    setEditForm({ name: student.name, phone: student.phone, grade: student.grade, language: student.language });
+    setEditPhoneError('');
+  };
+
+  const closeEdit = () => { setEditStudent(null); setEditForm(emptyStudent); };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    if (editPhoneError) return;
+    try {
+      setEditSaving(true);
+      setError('');
+      const response = await api.put(`/students/${editStudent._id}`, editForm);
+      setStudents((curr) =>
+        curr.map((s) => s._id === editStudent._id ? response.data.student : s)
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setNotice(`${response.data.student.name} updated.`);
+      setTimeout(() => setNotice(''), 3000);
+      closeEdit();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const createStudent = async (event) => {
@@ -105,7 +149,7 @@ const Roster = () => {
       setNotice(`${response.data.student.name} added to roster.`);
       setTimeout(() => setNotice(''), 4000);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.error || err.message);
     } finally {
       setSaving(false);
     }
@@ -120,7 +164,7 @@ const Roster = () => {
       setNotice(`${student.name} removed.`);
       setTimeout(() => setNotice(''), 3000);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.error || err.message);
     } finally {
       setDeleting('');
     }
@@ -128,6 +172,58 @@ const Roster = () => {
 
   return (
     <div className="space-y-5">
+      {/* Edit modal */}
+      {editStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-xl font-black text-[#11233f]">Edit student</h2>
+              <button onClick={closeEdit} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100">
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={saveEdit} className="grid gap-3">
+              <label className="grid gap-1.5 text-sm font-bold text-slate-600">
+                Student name
+                <input className="field" value={editForm.name} onChange={(e) => updateEditForm('name', e.target.value)} required placeholder="Full name" />
+              </label>
+              <label className="grid gap-1.5 text-sm font-bold text-slate-600">
+                WhatsApp number
+                <input className="field" value={editForm.phone} onChange={(e) => updateEditForm('phone', e.target.value)} required placeholder="919876543210" />
+                {editPhoneError
+                  ? <span className="text-xs font-semibold text-rose-600">{editPhoneError}</span>
+                  : <span className="text-xs text-slate-400">Include country code · India: 91 + 10 digits</span>}
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="grid gap-1.5 text-sm font-bold text-slate-600">
+                  Grade
+                  <input className="field" value={editForm.grade} onChange={(e) => updateEditForm('grade', e.target.value)} placeholder="Class 6" />
+                </label>
+                <label className="grid gap-1.5 text-sm font-bold text-slate-600">
+                  Language
+                  <select className="field" value={editForm.language} onChange={(e) => updateEditForm('language', e.target.value)}>
+                    {LANGUAGES.map((l) => <option key={l}>{l}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-2 flex gap-3">
+                <button type="button" onClick={closeEdit} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving || !!editPhoneError}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {editSaving ? <Loader2 size={15} className="animate-spin" /> : null}
+                  Save changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <section className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <p className="text-xs font-black uppercase tracking-wider text-blue-600">Roster</p>
@@ -291,18 +387,28 @@ const Roster = () => {
                     <Phone size={12} />
                     +{student.phone}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => deleteStudent(student)}
-                    disabled={deleting === student._id}
-                    className="opacity-0 group-hover:opacity-100 grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                    title="Remove student"
-                  >
-                    {deleting === student._id
-                      ? <Loader2 size={13} className="animate-spin" />
-                      : <Trash2 size={13} />
-                    }
-                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(student)}
+                      className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+                      title="Edit student"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteStudent(student)}
+                      disabled={deleting === student._id}
+                      className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                      title="Remove student"
+                    >
+                      {deleting === student._id
+                        ? <Loader2 size={13} className="animate-spin" />
+                        : <Trash2 size={13} />
+                      }
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
