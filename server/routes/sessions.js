@@ -7,6 +7,7 @@ const { previewQuestions, startSession } = require('../controllers/questionContr
 const { analyzeSession } = require('../controllers/analysisController');
 const { resendSessionFeedback } = require('../controllers/feedbackController');
 const { sendAcknowledgement, sendQuestionsToStudent } = require('../services/whatsappService');
+const { addClient, removeClient, broadcast } = require('../services/sseService');
 
 const router = express.Router();
 
@@ -166,12 +167,41 @@ router.post('/:sessionId/responses', async (req, res) => {
       .populate('teacherId', 'name school subject grade language')
       .populate('responses.studentId', 'name phone riskLevel confidenceLevel');
     const messages = await Message.find({ sessionId: session._id }).sort({ createdAt: -1 }).limit(50).populate('studentId', 'name');
+
+    broadcast(String(session._id), 'response', {
+      sessionId: String(session._id),
+      responses: updated.responses,
+      responseCount: updated.responses.length
+    });
+
     console.log(`[sessions] Added mock WhatsApp response from ${student.name} for ${session.topic}.`);
     return res.status(201).json({ success: true, session: updated, messages });
   } catch (error) {
     console.error('[sessions] Add response failed:', error.message);
     return res.status(500).json({ success: false, error: error.message });
   }
+});
+
+router.get('/:sessionId/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const { sessionId } = req.params;
+  addClient(sessionId, res);
+
+  res.write(`event: connected\ndata: ${JSON.stringify({ sessionId })}\n\n`);
+
+  const heartbeat = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch (_) {}
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    removeClient(sessionId, res);
+  });
 });
 
 router.get('/teacher/:teacherId', async (req, res) => {
