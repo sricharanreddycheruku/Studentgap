@@ -1,7 +1,6 @@
 const Session = require('../models/Session');
 const Student = require('../models/Student');
 const Message = require('../models/Message');
-const { twiml } = require('twilio');
 
 const ACKNOWLEDGEMENT = 'Response received! Your teacher will review and share personalised feedback soon. Keep it up! 👍';
 
@@ -9,12 +8,6 @@ const normalizePhone = (value = '') => String(value)
   .replace('whatsapp:', '')
   .replace(/\s+/g, '')
   .replace(/^\+/, '');
-
-const sendTwiml = (res, status, message) => {
-  const response = new twiml.MessagingResponse();
-  response.message(message);
-  return res.status(status).type('text/xml').send(response.toString());
-};
 
 const parseAnswers = (body = '', count = 3) => {
   const answerLines = body
@@ -38,22 +31,45 @@ const parseMultipleChoice = (body = '', questionCount = 0) => {
   return responses.slice(0, questionCount);
 };
 
+// GET /api/webhook/whatsapp — Meta webhook verification
+const verifyWebhook = (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    console.log('[webhook] Meta webhook verified.');
+    return res.status(200).send(challenge);
+  }
+
+  console.warn('[webhook] Meta webhook verification failed.');
+  return res.sendStatus(403);
+};
+
+// POST /api/webhook/whatsapp — incoming messages from Meta
 const receiveWhatsappResponse = async (req, res) => {
+  // Always respond 200 immediately so Meta doesn't retry
+  res.sendStatus(200);
+
   try {
-    const from = normalizePhone(req.body.From || req.body.from);
-    const body = String(req.body.Body || req.body.body || '').trim();
+    const entry = req.body?.entry?.[0];
+    const change = entry?.changes?.[0];
+    const message = change?.value?.messages?.[0];
 
-    console.log(`[webhook] Incoming WhatsApp from normalized: ${from}`);
+    if (!message || message.type !== 'text') return;
 
-    if (!from || !body) {
-      return sendTwiml(res, 400, 'Please send your answers as a text message.');
-    }
+    const from = normalizePhone(message.from);
+    const body = String(message.text?.body || '').trim();
+
+    console.log(`[webhook] Incoming WhatsApp from: ${from}`);
+
+    if (!from || !body) return;
 
     const student = await Student.findOne({ phone: from });
 
     if (!student) {
       console.warn(`[webhook] No student found for phone: ${from}`);
-      return sendTwiml(res, 404, 'Your WhatsApp number is not registered in any class roster. Please contact your teacher.');
+      return;
     }
 
     const session = await Session.findOne({
@@ -61,13 +77,7 @@ const receiveWhatsappResponse = async (req, res) => {
       status: 'active'
     }).sort({ date: -1 });
 
-    if (!session) {
-      return sendTwiml(res, 404, 'No active classroom check-in right now. Your teacher will send one soon!');
-    }
-
-    if (session.formStatus === 'closed') {
-      return sendTwiml(res, 400, 'The form for this session is now closed. Thank you for participating!');
-    }
+    if (!session || session.formStatus === 'closed') return;
 
     const hasMCQ = session.questions.some((q) => q.type === 'multiple_choice');
     let answers = [];
@@ -80,9 +90,7 @@ const receiveWhatsappResponse = async (req, res) => {
       answers = parseAnswers(body, session.questions.length);
     }
 
-    if (!answers.length) {
-      return sendTwiml(res, 400, 'Please provide at least one answer. Reply with your answers to the questions.');
-    }
+    if (!answers.length) return;
 
     const existing = session.responses.find((r) => String(r.studentId) === String(student._id));
     const payload = {
@@ -107,17 +115,15 @@ const receiveWhatsappResponse = async (req, res) => {
       studentId: student._id,
       sessionId: session._id,
       type: 'acknowledgement',
-      deliveryMode: 'twilio',
+      deliveryMode: 'meta',
       status: 'sent',
       content: ACKNOWLEDGEMENT
     });
 
     console.log(`[webhook] Stored WhatsApp response from ${student.name} for ${session.topic}.`);
-    return sendTwiml(res, 200, ACKNOWLEDGEMENT);
   } catch (error) {
-    console.error('[webhook] WhatsApp response failed:', error.message);
-    return sendTwiml(res, 500, 'Something went wrong. Please try again.');
+    console.error('[webhook] WhatsApp response processing failed:', error.message);
   }
 };
 
-module.exports = { receiveWhatsappResponse };
+module.exports = { verifyWebhook, receiveWhatsappResponse };

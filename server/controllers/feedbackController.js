@@ -1,7 +1,7 @@
 const Session = require('../models/Session');
 const Student = require('../models/Student');
 const { generateStudentFeedback, generateParentSummary } = require('../services/geminiService');
-const { sendFeedbackToStudent, sendParentSummary } = require('../services/twilioService');
+const { sendFeedbackToStudent, sendParentSummary } = require('../services/whatsappService');
 
 const sendFeedbackForAnalysis = async (session, studentsById) => {
   const logs = [];

@@ -6,7 +6,7 @@ const Teacher = require('../models/Teacher');
 const { previewQuestions, startSession } = require('../controllers/questionController');
 const { analyzeSession } = require('../controllers/analysisController');
 const { resendSessionFeedback } = require('../controllers/feedbackController');
-const { sendAcknowledgement, sendQuestionsToStudent } = require('../services/twilioService');
+const { sendAcknowledgement, sendQuestionsToStudent } = require('../services/whatsappService');
 
 const router = express.Router();
 

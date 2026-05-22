@@ -19,18 +19,17 @@ const getBaseUrl = (req) => {
 };
 
 router.get('/status', (req, res) => {
-  const twilioConfigured = Boolean(
-    process.env.TWILIO_ACCOUNT_SID
-    && process.env.TWILIO_AUTH_TOKEN
-    && process.env.TWILIO_WHATSAPP_NUMBER
+  const metaConfigured = Boolean(
+    process.env.WHATSAPP_TOKEN
+    && process.env.WHATSAPP_PHONE_NUMBER_ID
   );
   const mockWhatsapp = String(process.env.USE_MOCK_WHATSAPP).toLowerCase() === 'true';
   const baseUrl = getBaseUrl(req);
   const webhookPath = '/api/webhook/whatsapp';
-  const missingTwilio = [
-    ['TWILIO_ACCOUNT_SID', process.env.TWILIO_ACCOUNT_SID],
-    ['TWILIO_AUTH_TOKEN', process.env.TWILIO_AUTH_TOKEN],
-    ['TWILIO_WHATSAPP_NUMBER', process.env.TWILIO_WHATSAPP_NUMBER]
+  const missingMeta = [
+    ['WHATSAPP_TOKEN', process.env.WHATSAPP_TOKEN],
+    ['WHATSAPP_PHONE_NUMBER_ID', process.env.WHATSAPP_PHONE_NUMBER_ID],
+    ['WHATSAPP_VERIFY_TOKEN', process.env.WHATSAPP_VERIFY_TOKEN]
   ].filter(([, value]) => !value).map(([key]) => key);
 
   return res.json({
@@ -38,12 +37,11 @@ router.get('/status', (req, res) => {
     status: {
       api: 'online',
       database: Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL),
-      geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-      whatsappMode: mockWhatsapp ? 'mock' : 'twilio',
-      twilioConfigured,
-      realWhatsappReady: !mockWhatsapp && twilioConfigured,
-      missingTwilio,
-      sender: process.env.TWILIO_WHATSAPP_NUMBER || '',
+      geminiConfigured: Boolean(process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY),
+      whatsappMode: mockWhatsapp ? 'mock' : 'meta',
+      metaConfigured,
+      realWhatsappReady: !mockWhatsapp && metaConfigured,
+      missingMeta,
       webhookPath,
       webhookUrl: `${baseUrl}${webhookPath}`
     }

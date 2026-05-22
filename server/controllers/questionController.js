@@ -3,7 +3,7 @@ const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 const Topic = require('../models/Topic');
 const { generateQuestions } = require('../services/geminiService');
-const { sendQuestionsToStudent } = require('../services/twilioService');
+const { sendQuestionsToStudent } = require('../services/whatsappService');
 
 const previewQuestions = async (req, res) => {
   try {
