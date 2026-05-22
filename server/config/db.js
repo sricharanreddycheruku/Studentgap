@@ -77,6 +77,16 @@ CREATE INDEX IF NOT EXISTS messages_student_created_idx ON messages (student_id,
 CREATE INDEX IF NOT EXISTS messages_session_created_idx ON messages (session_id, created_at DESC);
 `;
 
+const migrations = `
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS form_status TEXT NOT NULL DEFAULT 'open';
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS class_insight JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS grouped_students JSONB NOT NULL DEFAULT '{"advanced":[],"average":[],"needsSupport":[]}'::jsonb;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS risk_level TEXT NOT NULL DEFAULT 'low';
+ALTER TABLE students ADD COLUMN IF NOT EXISTS confidence_level TEXT NOT NULL DEFAULT 'medium';
+ALTER TABLE students ADD COLUMN IF NOT EXISTS learning_profile JSONB NOT NULL DEFAULT '{"strongTopics":[],"weakTopics":[],"recurringMistakes":[]}'::jsonb;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS progress_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+`;
+
 const connectDB = async () => {
   if (!connectionString) {
     throw new Error('DATABASE_URL is missing. Add your PostgreSQL connection string to .env.');
@@ -88,6 +98,7 @@ const connectDB = async () => {
     try {
       await client.query('SELECT NOW()');
       await client.query(schema);
+      await client.query(migrations);
       console.log('[database] PostgreSQL connected and schema is ready.');
     } finally {
       client.release();
