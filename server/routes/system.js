@@ -53,6 +53,7 @@ router.get('/status', async (req, res) => {
   const smsConfigured = smsReady();
   const baseUrl = await getBaseUrl(req);
   const webhookPath = '/api/webhook/whatsapp';
+  const webhookUrl = `${baseUrl}${webhookPath}`;
   const missing = [
     ['GREENAPI_INSTANCE_ID', process.env.GREENAPI_INSTANCE_ID],
     ['GREENAPI_API_TOKEN', process.env.GREENAPI_API_TOKEN],
@@ -75,7 +76,12 @@ router.get('/status', async (req, res) => {
       passwordResetChannel: smsConfigured ? 'sms' : greenApiConfigured ? 'whatsapp' : 'none',
       missing,
       webhookPath,
-      webhookUrl: `${baseUrl}${webhookPath}`
+      webhookUrl,
+      fallbackWebhookUrls: [
+        `${baseUrl}/api/webhook`,
+        `${baseUrl}/webhook/whatsapp`,
+        `${baseUrl}/`
+      ]
     }
   });
 });

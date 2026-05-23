@@ -12,6 +12,7 @@ const sessionsRoutes = require('./routes/sessions');
 const analyticsRoutes = require('./routes/analytics');
 const webhookRoutes = require('./routes/webhook');
 const systemRoutes = require('./routes/system');
+const { receiveWhatsappResponse } = require('./controllers/whatsappController');
 
 const app = express();
 const port = process.env.API_PORT || 3000;
@@ -36,6 +37,10 @@ app.use('/api/sessions', sessionsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/system', systemRoutes);
+
+// Green API accepts a single webhook URL. Accept common root-level URLs too
+// so replies still arrive if the dashboard is pointed at the ngrok base URL.
+app.post(['/', '/webhook', '/webhook/whatsapp', '/greenapi'], receiveWhatsappResponse);
 
 if (fs.existsSync(path.join(distPath, 'index.html'))) {
   app.use(express.static(distPath));

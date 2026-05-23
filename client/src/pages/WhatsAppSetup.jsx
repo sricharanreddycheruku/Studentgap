@@ -159,6 +159,7 @@ const WhatsAppSetup = () => {
                 <p>· Green API Dashboard → Instance → <strong>Notifications</strong></p>
                 <p>· Paste URL in <strong>Webhook</strong> field</p>
                 <p>· Enable <strong>incomingMessageReceived</strong></p>
+                <p>· Root ngrok URLs are accepted too, but this exact URL is best</p>
               </div>
             </div>
 
@@ -186,7 +187,7 @@ const WhatsAppSetup = () => {
                 </Step>
 
                 <Step num="4" title="Set the webhook URL">
-                  <p>In Green API → your instance → <strong>Notifications</strong> tab, paste the webhook URL (left panel). Enable <strong>incomingMessageReceived</strong> and save.</p>
+                  <p>In Green API → your instance → <strong>Notifications</strong> tab, paste the webhook URL (left panel). Enable <strong>incomingMessageReceived</strong>; sent-message and status toggles can stay enabled.</p>
                 </Step>
 
                 <Step num="5" title="Add students with their phone numbers">

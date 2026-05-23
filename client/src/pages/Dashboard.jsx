@@ -52,10 +52,10 @@ const Dashboard = () => {
     loadTeachers();
   }, []);
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async ({ background = false } = {}) => {
     if (!teacherId) { setLoading(false); return; }
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       setError('');
       const [dashRes, riskRes, miscRes] = await Promise.all([
         api.get(`/analytics/dashboard/${teacherId}`),
@@ -78,6 +78,13 @@ const Dashboard = () => {
 
   const selectedTeacher = teachers.find((t) => t._id === teacherId);
   const recentSessions = dashboard.recentSessions || [];
+  const hasActiveSession = recentSessions.some((session) => session.status === 'active');
+
+  useEffect(() => {
+    if (!teacherId || !hasActiveSession) return undefined;
+    const timer = window.setInterval(() => loadDashboard({ background: true }), 5000);
+    return () => window.clearInterval(timer);
+  }, [teacherId, hasActiveSession, loadDashboard]);
 
   return (
     <div className="space-y-5">

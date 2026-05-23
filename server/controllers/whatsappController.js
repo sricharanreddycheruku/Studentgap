@@ -4,7 +4,7 @@ const Message = require('../models/Message');
 const Teacher = require('../models/Teacher');
 const { sendAcknowledgement } = require('../services/whatsappService');
 const { broadcast } = require('../services/sseService');
-const { normalizePhone } = require('../utils/phone');
+const { parseGreenApiReply } = require('../utils/greenApiWebhook');
 
 const splitAnswers = (body = '', count = 3) => {
   const lines = body
@@ -47,23 +47,7 @@ const parseSessionAnswers = (body = '', questions = []) => {
   };
 };
 
-const getIncomingText = (messageData = {}) => String(
-  messageData?.textMessageData?.textMessage
-  || messageData?.extendedTextMessageData?.text
-  || messageData?.extendedTextMessageData?.description
-  || messageData?.quotedMessage?.textMessage
-  || messageData?.quotedMessage?.textMessageData?.textMessage
-  || ''
-).trim();
-
-const getSenderPhone = (senderData = {}) => normalizePhone(
-  senderData.chatId
-  || senderData.sender
-  || senderData.senderContactName
-  || ''
-);
-
-const findOrCreateStudent = async (phone) => {
+const findOrCreateStudent = async (phone, senderName = '') => {
   const student = await Student.findOne({ phone });
   if (student) return student;
 
@@ -80,7 +64,7 @@ const findOrCreateStudent = async (phone) => {
 
   const created = await Student.create({
     teacherId,
-    name: `Student ${phone.slice(-4)}`,
+    name: senderName || `Student ${phone.slice(-4)}`,
     phone,
     grade: teacher.grade || 'Class 6',
     language: teacher.language || 'English',
@@ -94,83 +78,120 @@ const findOrCreateStudent = async (phone) => {
   return created;
 };
 
+const broadcastSessionSnapshot = async (sessionId) => {
+  const [populated, messages] = await Promise.all([
+    Session.findById(sessionId)
+      .populate('teacherId', 'name subject grade language')
+      .populate('responses.studentId', 'name phone riskLevel confidenceLevel'),
+    Message.find({ sessionId }).sort({ createdAt: -1 }).limit(50).populate('studentId', 'name')
+  ]);
+
+  if (!populated) return null;
+
+  const payload = {
+    sessionId: String(sessionId),
+    responses: populated.responses,
+    responseCount: populated.responses.length,
+    messages
+  };
+
+  broadcast(String(sessionId), 'response', payload);
+  return payload;
+};
+
+const sendAcknowledgementAndRefresh = async (student, session) => {
+  try {
+    await sendAcknowledgement(student, session);
+    await broadcastSessionSnapshot(session._id);
+  } catch (error) {
+    console.error(`[webhook] Acknowledgement failed for ${student.name}:`, error.message);
+  }
+};
+
+const processWhatsappWebhook = async (rawPayload = {}) => {
+  const parsedWebhook = parseGreenApiReply(rawPayload);
+
+  if (!parsedWebhook.accepted) {
+    console.log(`[webhook] ${parsedWebhook.reason}.`);
+    return { stored: false, reason: parsedWebhook.reason };
+  }
+
+  const { phone, body, senderName, idMessage } = parsedWebhook;
+  const student = await findOrCreateStudent(phone, senderName);
+  if (!student) {
+    return { stored: false, reason: `student ${phone} could not be resolved` };
+  }
+
+  const session = await Session.findOne({
+    teacherId: student.teacherId,
+    status: 'active'
+  }).sort({ date: -1 });
+
+  if (!session) {
+    console.warn(`[webhook] ${student.name} replied, but no active session exists.`);
+    return { stored: false, reason: 'no active session' };
+  }
+
+  if (session.formStatus === 'closed') {
+    console.warn(`[webhook] ${student.name} replied to ${session.topic}, but the form is closed.`);
+    return { stored: false, reason: 'session form closed' };
+  }
+
+  const parsed = parseSessionAnswers(body, session.questions || []);
+  if (!parsed.answers.length) {
+    console.warn(`[webhook] Empty answer set from ${student.name}.`);
+    return { stored: false, reason: 'empty answer set' };
+  }
+
+  const responsePayload = {
+    studentId: student._id,
+    answers: parsed.answers,
+    selectedOptions: parsed.selectedOptions,
+    score: 0,
+    understood: 'partial',
+    misconception: '',
+    confidenceLevel: 'medium',
+    submittedAt: new Date()
+  };
+
+  session.responses = Array.isArray(session.responses) ? session.responses : [];
+  const existing = session.responses.find((r) => String(r.studentId) === String(student._id));
+  if (existing) {
+    Object.assign(existing, responsePayload);
+  } else {
+    session.responses.push(responsePayload);
+  }
+
+  await session.save();
+  await Message.create({
+    studentId: student._id,
+    sessionId: session._id,
+    type: 'reply',
+    deliveryMode: 'greenapi',
+    status: 'received',
+    content: body
+  });
+
+  await broadcastSessionSnapshot(session._id);
+  sendAcknowledgementAndRefresh(student, session);
+
+  console.log(`[webhook] Stored reply from ${student.name} for ${session.topic}${idMessage ? ` (${idMessage})` : ''}.`);
+  return {
+    stored: true,
+    sessionId: String(session._id),
+    studentId: String(student._id)
+  };
+};
+
 // Green API webhook: POST /api/webhook/whatsapp
 const receiveWhatsappResponse = async (req, res) => {
   res.sendStatus(200);
 
   try {
-    const { typeWebhook, senderData, messageData } = req.body || {};
-
-    if (typeWebhook !== 'incomingMessageReceived') return;
-
-    const msgType = messageData?.typeMessage;
-    if (!['textMessage', 'quotedMessage', 'extendedTextMessage'].includes(msgType)) return;
-
-    const phone = getSenderPhone(senderData);
-    const body = getIncomingText(messageData);
-
-    if (!phone || !body) return;
-
-    const student = await findOrCreateStudent(phone);
-    if (!student) return;
-
-    const session = await Session.findOne({
-      teacherId: student.teacherId,
-      status: 'active'
-    }).sort({ date: -1 });
-
-    if (!session || session.formStatus === 'closed') return;
-
-    const parsed = parseSessionAnswers(body, session.questions || []);
-    if (!parsed.answers.length) return;
-
-    const payload = {
-      studentId: student._id,
-      answers: parsed.answers,
-      selectedOptions: parsed.selectedOptions,
-      score: 0,
-      understood: 'partial',
-      misconception: '',
-      confidenceLevel: 'medium',
-      submittedAt: new Date()
-    };
-
-    const existing = session.responses.find((r) => String(r.studentId) === String(student._id));
-    if (existing) {
-      Object.assign(existing, payload);
-    } else {
-      session.responses.push(payload);
-    }
-
-    await session.save();
-    await Message.create({
-      studentId: student._id,
-      sessionId: session._id,
-      type: 'reply',
-      deliveryMode: 'greenapi',
-      status: 'received',
-      content: body
-    });
-    await sendAcknowledgement(student, session);
-
-    const [populated, messages] = await Promise.all([
-      Session.findById(session._id)
-        .populate('teacherId', 'name subject grade language')
-        .populate('responses.studentId', 'name phone riskLevel confidenceLevel'),
-      Message.find({ sessionId: session._id }).sort({ createdAt: -1 }).limit(50).populate('studentId', 'name')
-    ]);
-
-    broadcast(String(session._id), 'response', {
-      sessionId: String(session._id),
-      responses: populated.responses,
-      responseCount: populated.responses.length,
-      messages
-    });
-
-    console.log(`[webhook] Stored reply from ${student.name} for ${session.topic}.`);
+    await processWhatsappWebhook(req.body || {});
   } catch (error) {
     console.error('[webhook] Processing failed:', error.message);
   }
 };
 
-module.exports = { receiveWhatsappResponse };
+module.exports = { processWhatsappWebhook, receiveWhatsappResponse };

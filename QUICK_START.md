@@ -54,6 +54,14 @@ https://your-ngrok-url/api/webhook/whatsapp
 
 Enable the `incomingMessageReceived` notification. When students reply in WhatsApp, their responses appear on the session results page live.
 
+The backend also accepts Green API posts at `/`, `/webhook`, `/webhook/whatsapp`, and `/api/webhook` so an ngrok base URL still works during demos. The full `/api/webhook/whatsapp` URL is the preferred setting.
+
+To replay a local Green API-style reply against your running server:
+
+```bash
+npm run replay:webhook -- 919876543210 "A B C"
+```
+
 ## 5. Seed demo data
 
 ```bash

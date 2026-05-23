@@ -8,6 +8,7 @@
     "server": "nodemon server/index.js",
     "client": "vite --config client/vite.config.mjs",
     "seed": "node server/seed.js",
+    "replay:webhook": "node server/scripts/replayGreenApiWebhook.js",
     "build": "vite build --config client/vite.config.mjs",
     "start": "node server/index.js"
   },
