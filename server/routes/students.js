@@ -7,7 +7,9 @@ const { validatePhone } = require('../utils/phone');
 const router = express.Router();
 
 const isDuplicateStudentPhone = (error) =>
-  error.code === '23505' && String(error.constraint || '').includes('students_phone');
+  error.code === '23505' && /students_(teacher_)?phone/.test(String(error.constraint || ''));
+
+const duplicatePhoneMessage = 'A student with this phone number already exists in this teacher roster.';
 
 router.post('/', async (req, res) => {
   try {
@@ -24,6 +26,14 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, error: `Missing required student fields: ${missing.join(', ')}.` });
     }
 
+    const existing = await Student.findOne({ teacherId: payload.teacherId, phone: payload.phone });
+    if (existing) {
+      await Student.updateOne({ _id: existing._id }, payload);
+      const updated = await Student.findById(existing._id);
+      console.log(`[students] Reused existing student ${updated.name} with phone ${updated.phone}.`);
+      return res.status(200).json({ success: true, student: updated, reused: true });
+    }
+
     const student = await Student.create(payload);
     console.log(`[students] Created student ${student.name} with phone ${student.phone}.`);
     return res.status(201).json({ success: true, student });
@@ -32,7 +42,7 @@ router.post('/', async (req, res) => {
     console.error('[students] Create failed:', error.message);
     return res.status(duplicatePhone ? 409 : 500).json({
       success: false,
-      error: duplicatePhone ? 'A student with this phone number already exists.' : error.message
+      error: duplicatePhone ? duplicatePhoneMessage : error.message
     });
   }
 });
@@ -62,7 +72,7 @@ router.put('/:studentId', async (req, res) => {
     console.error('[students] Update failed:', error.message);
     return res.status(duplicatePhone ? 409 : 500).json({
       success: false,
-      error: duplicatePhone ? 'A student with this phone number already exists.' : error.message
+      error: duplicatePhone ? duplicatePhoneMessage : error.message
     });
   }
 });
@@ -73,9 +83,13 @@ router.delete('/:studentId', async (req, res) => {
     if (!student) {
       return res.status(404).json({ success: false, error: 'Student not found.' });
     }
-    await Student.deleteOne({ _id: student._id });
-    console.log(`[students] Deleted student ${student.name}.`);
-    return res.json({ success: true });
+    const result = await Student.deleteOne({ _id: student._id });
+    if (!result.deletedCount) {
+      return res.status(404).json({ success: false, error: 'Student was already removed.' });
+    }
+
+    console.log(`[students] Deleted student ${student.name} (${student.phone}).`);
+    return res.json({ success: true, deletedStudentId: String(student._id) });
   } catch (error) {
     console.error('[students] Delete failed:', error.message);
     return res.status(500).json({ success: false, error: error.message });

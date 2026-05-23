@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS students (
   name TEXT NOT NULL,
   grade TEXT NOT NULL,
   teacher_id UUID NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
-  phone TEXT NOT NULL UNIQUE,
+  phone TEXT NOT NULL,
   language TEXT NOT NULL DEFAULT 'English'
 );
 
@@ -81,6 +81,7 @@ ALTER TABLE students ADD COLUMN IF NOT EXISTS risk_level TEXT NOT NULL DEFAULT '
 ALTER TABLE students ADD COLUMN IF NOT EXISTS confidence_level TEXT NOT NULL DEFAULT 'medium';
 ALTER TABLE students ADD COLUMN IF NOT EXISTS learning_profile JSONB NOT NULL DEFAULT '{"strongTopics":[],"weakTopics":[],"recurringMistakes":[]}'::jsonb;
 ALTER TABLE students ADD COLUMN IF NOT EXISTS progress_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE students DROP CONSTRAINT IF EXISTS students_phone_key;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS form_status TEXT NOT NULL DEFAULT 'open';
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS grouped_students JSONB NOT NULL DEFAULT '{"advanced":[],"average":[],"needsSupport":[]}'::jsonb;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS class_insight JSONB NOT NULL DEFAULT '{}'::jsonb;
@@ -94,6 +95,7 @@ ALTER TABLE messages ADD CONSTRAINT messages_status_check CHECK (status IN ('sen
 
 const indexes = `
 CREATE INDEX IF NOT EXISTS students_teacher_idx ON students (teacher_id);
+CREATE UNIQUE INDEX IF NOT EXISTS students_teacher_phone_idx ON students (teacher_id, phone);
 CREATE INDEX IF NOT EXISTS sessions_teacher_date_idx ON sessions (teacher_id, date DESC);
 CREATE INDEX IF NOT EXISTS sessions_form_status_idx ON sessions (form_status);
 CREATE INDEX IF NOT EXISTS messages_student_created_idx ON messages (student_id, created_at DESC);

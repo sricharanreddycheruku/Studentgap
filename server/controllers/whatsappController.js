@@ -50,8 +50,24 @@ const parseSessionAnswers = (body = '', questions = []) => {
   };
 };
 
+const findStudentForActiveSession = async (phone) => {
+  const candidates = await Student.find({ phone }).lean();
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0];
+
+  const teacherIds = candidates.map((student) => student.teacherId).filter(Boolean);
+  const activeSessions = await Session.find({
+    teacherId: { $in: teacherIds },
+    status: 'active'
+  }).sort({ date: -1 }).lean();
+  const activeTeacherId = activeSessions[0]?.teacherId;
+
+  if (!activeTeacherId) return candidates[0];
+  return candidates.find((student) => String(student.teacherId) === String(activeTeacherId)) || candidates[0];
+};
+
 const findOrCreateStudent = async (phone, senderName = '') => {
-  const student = await Student.findOne({ phone });
+  const student = await findStudentForActiveSession(phone);
   if (student) return student;
 
   const latestActive = (await Session.find({ status: 'active' }).sort({ date: -1 }).limit(1).lean())[0];
