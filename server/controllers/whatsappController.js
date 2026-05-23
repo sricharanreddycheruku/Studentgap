@@ -54,10 +54,32 @@ const receiveWhatsappResponse = async (req, res) => {
     console.log(`[webhook] Incoming WhatsApp from: ${from}`);
     if (!from || !body) return;
 
-    const student = await Student.findOne({ phone: from });
+    let student = await Student.findOne({ phone: from });
     if (!student) {
-      console.warn(`[webhook] No student found for phone: ${from}`);
-      return;
+      // Auto-create a student record for unknown numbers so responses aren't lost
+      const teacher = await (await Session.find({ status: 'active' }).sort({ date: -1 }).lean())[0]?.teacherId;
+      const teacherId = teacher?._id || teacher;
+      if (!teacherId) {
+        console.warn(`[webhook] No active session and no student found for phone: ${from} — ignoring.`);
+        return;
+      }
+      const Teacher = require('../models/Teacher');
+      const teacherDoc = await Teacher.findById(teacherId).lean();
+      if (!teacherDoc) {
+        console.warn(`[webhook] No student found for phone: ${from} — ignoring.`);
+        return;
+      }
+      student = await Student.create({
+        teacherId,
+        name: `Student (${from.slice(-4)})`,
+        phone: from,
+        grade: teacherDoc.grade || 'Class 6',
+        riskLevel: 'low',
+        confidenceLevel: 'medium',
+        learningProfile: { strongTopics: [], weakTopics: [], recurringMistakes: [] },
+        progressHistory: []
+      });
+      console.log(`[webhook] Auto-created student record for unknown phone: ${from} → ${student.name}`);
     }
 
     const session = await Session.findOne({
