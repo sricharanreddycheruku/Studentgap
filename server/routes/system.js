@@ -1,6 +1,6 @@
 const express = require('express');
 const { smsReady } = require('../services/smsService');
-const { greenApiReady } = require('../services/whatsappService');
+const { getGreenApiInstanceStatus, greenApiReady } = require('../services/whatsappService');
 
 const router = express.Router();
 
@@ -48,12 +48,24 @@ const getBaseUrl = async (req) => {
   return `${proto}://${host}`;
 };
 
+const sameUrl = (left = '', right = '') =>
+  String(left).replace(/\/+$/, '') === String(right).replace(/\/+$/, '');
+
 router.get('/status', async (req, res) => {
   const greenApiConfigured = greenApiReady();
   const smsConfigured = smsReady();
   const baseUrl = await getBaseUrl(req);
   const webhookPath = '/api/webhook/whatsapp';
   const webhookUrl = `${baseUrl}${webhookPath}`;
+  const greenApiStatus = await getGreenApiInstanceStatus();
+  const configuredWebhookUrl = greenApiStatus.webhookUrl || '';
+  const incomingWebhookEnabled = String(greenApiStatus.incomingWebhook || '').toLowerCase() === 'yes';
+  const greenApiWebhookMatches = Boolean(configuredWebhookUrl) && sameUrl(configuredWebhookUrl, webhookUrl);
+  const greenApiAuthorized = greenApiStatus.state === 'authorized';
+  const webhookHealthy = greenApiConfigured
+    && greenApiAuthorized
+    && incomingWebhookEnabled
+    && greenApiWebhookMatches;
   const missing = [
     ['GREENAPI_INSTANCE_ID', process.env.GREENAPI_INSTANCE_ID],
     ['GREENAPI_API_TOKEN', process.env.GREENAPI_API_TOKEN],
@@ -70,7 +82,15 @@ router.get('/status', async (req, res) => {
       geminiConfigured: Boolean(process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY),
       whatsappMode: 'greenapi',
       greenApiConfigured,
-      realWhatsappReady: greenApiConfigured,
+      greenApiStatusChecked: greenApiStatus.checked,
+      greenApiStatusError: greenApiStatus.error || '',
+      greenApiState: greenApiStatus.state || '',
+      greenApiAuthorized,
+      configuredWebhookUrl,
+      incomingWebhookEnabled,
+      greenApiWebhookMatches,
+      webhookHealthy,
+      realWhatsappReady: webhookHealthy,
       smsConfigured,
       passwordResetConfigured: smsConfigured || greenApiConfigured,
       passwordResetChannel: smsConfigured ? 'sms' : greenApiConfigured ? 'whatsapp' : 'none',

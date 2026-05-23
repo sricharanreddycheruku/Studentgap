@@ -6,6 +6,7 @@ const persistMessage = async ({ student, sessionId, type, content, deliveryMode,
 
 const greenApiReady = () => Boolean(process.env.GREENAPI_INSTANCE_ID && process.env.GREENAPI_API_TOKEN);
 const GREEN_API_TIMEOUT_MS = Number(process.env.GREENAPI_TIMEOUT_MS || 15000);
+const GREEN_API_STATUS_TIMEOUT_MS = Number(process.env.GREENAPI_STATUS_TIMEOUT_MS || 2500);
 
 const assertWhatsAppReady = () => {
   if (!greenApiReady()) {
@@ -13,19 +14,70 @@ const assertWhatsAppReady = () => {
   }
 };
 
-const sendWhatsAppText = async (toPhone, content) => {
+const greenApiUrl = (method) => {
   const instanceId = process.env.GREENAPI_INSTANCE_ID;
   const apiToken = process.env.GREENAPI_API_TOKEN;
+  return `https://api.green-api.com/waInstance${instanceId}/${method}/${apiToken}`;
+};
+
+const fetchGreenApiJson = async (method, timeoutMs = GREEN_API_STATUS_TIMEOUT_MS) => {
+  assertWhatsAppReady();
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(greenApiUrl(method), { signal: controller.signal });
+    const text = await response.text();
+    const payload = text ? JSON.parse(text) : {};
+
+    if (!response.ok) {
+      throw new Error(`Green API ${method} failed with ${response.status}`);
+    }
+
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const getGreenApiInstanceStatus = async () => {
+  if (!greenApiReady()) {
+    return { checked: false };
+  }
+
+  try {
+    const [state, settings] = await Promise.all([
+      fetchGreenApiJson('getStateInstance'),
+      fetchGreenApiJson('getSettings')
+    ]);
+
+    return {
+      checked: true,
+      state: state?.stateInstance || '',
+      webhookUrl: settings?.webhookUrl || '',
+      incomingWebhook: settings?.incomingWebhook || ''
+    };
+  } catch (error) {
+    return {
+      checked: false,
+      error: error.name === 'AbortError'
+        ? 'Green API status check timed out.'
+        : error.message
+    };
+  }
+};
+
+const sendWhatsAppText = async (toPhone, content) => {
   assertWhatsAppReady();
 
   const to = normalizePhone(toPhone);
-  const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GREEN_API_TIMEOUT_MS);
 
   let response;
   try {
-    response = await fetch(url, {
+    response = await fetch(greenApiUrl('sendMessage'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
@@ -107,6 +159,7 @@ const sendParentSummary = (student, session, content) =>
 
 module.exports = {
   assertWhatsAppReady,
+  getGreenApiInstanceStatus,
   greenApiReady,
   sendWhatsAppText,
   sendQuestionsToStudent,

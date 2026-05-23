@@ -91,7 +91,7 @@ const WhatsAppSetup = () => {
 
       {!loading && status && (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             <Signal label="API server" detail="Backend online" ready={status.api === 'online'} />
             <Signal label="Database" detail="PostgreSQL connected" ready={status.database} />
             <Signal
@@ -101,8 +101,31 @@ const WhatsAppSetup = () => {
             />
             <Signal
               label="Green API"
-              detail={status.greenApiConfigured ? 'Instance configured' : 'Credentials missing'}
-              ready={status.greenApiConfigured}
+              detail={!status.greenApiConfigured
+                ? 'Credentials missing'
+                : status.greenApiAuthorized
+                  ? 'Instance authorized'
+                  : status.greenApiStatusChecked
+                    ? `State: ${status.greenApiState || 'unknown'}`
+                    : 'Credentials configured'}
+              ready={status.greenApiConfigured && (!status.greenApiStatusChecked || status.greenApiAuthorized)}
+            />
+            <Signal
+              label="Webhook"
+              detail={!status.greenApiConfigured
+                ? 'Green API missing'
+                : status.webhookHealthy
+                  ? 'Incoming replies connected'
+                  : !status.greenApiStatusChecked
+                    ? (status.greenApiStatusError || 'Could not verify Green API')
+                    : !status.incomingWebhookEnabled
+                      ? 'incomingWebhook is off'
+                      : !status.configuredWebhookUrl
+                        ? 'Webhook URL missing'
+                        : !status.greenApiWebhookMatches
+                          ? 'Old ngrok URL in Green API'
+                          : 'Webhook not ready'}
+              ready={status.webhookHealthy}
             />
             <Signal
               label="Password reset"
@@ -115,13 +138,27 @@ const WhatsAppSetup = () => {
             />
           </section>
 
-          {status.greenApiConfigured && (
+          {status.webhookHealthy && (
             <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <CheckCircle2 size={20} className="text-emerald-600 shrink-0" />
               <div>
                 <p className="font-black text-emerald-800">Green API is active!</p>
                 <p className="mt-0.5 text-sm text-emerald-700">
                   Real WhatsApp messages are being sent and received.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {status.greenApiConfigured && !status.webhookHealthy && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <TriangleAlert size={20} className="mt-0.5 shrink-0 text-amber-600" />
+              <div className="min-w-0">
+                <p className="font-black text-amber-900">WhatsApp replies are not connected yet.</p>
+                <p className="mt-1 text-sm text-amber-800">
+                  Green API is currently using{' '}
+                  <span className="break-all font-mono text-xs">{status.configuredWebhookUrl || 'no webhook URL'}</span>.
+                  Paste the current webhook URL below in Green API so incoming replies reach this dashboard.
                 </p>
               </div>
             </div>
