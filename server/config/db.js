@@ -62,9 +62,21 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS password_reset_codes (
+  id UUID PRIMARY KEY,
+  teacher_id UUID NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  phone TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
 
 const migrations = `
+ALTER TABLE teachers ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE teachers ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 ALTER TABLE students ADD COLUMN IF NOT EXISTS risk_level TEXT NOT NULL DEFAULT 'low';
 ALTER TABLE students ADD COLUMN IF NOT EXISTS confidence_level TEXT NOT NULL DEFAULT 'medium';
 ALTER TABLE students ADD COLUMN IF NOT EXISTS learning_profile JSONB NOT NULL DEFAULT '{"strongTopics":[],"weakTopics":[],"recurringMistakes":[]}'::jsonb;
@@ -80,6 +92,9 @@ CREATE INDEX IF NOT EXISTS sessions_teacher_date_idx ON sessions (teacher_id, da
 CREATE INDEX IF NOT EXISTS sessions_form_status_idx ON sessions (form_status);
 CREATE INDEX IF NOT EXISTS messages_student_created_idx ON messages (student_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS messages_session_created_idx ON messages (session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS teachers_phone_idx ON teachers (phone);
+CREATE INDEX IF NOT EXISTS password_reset_codes_phone_idx ON password_reset_codes (phone, created_at DESC);
+CREATE INDEX IF NOT EXISTS password_reset_codes_teacher_idx ON password_reset_codes (teacher_id, created_at DESC);
 `;
 
 const connectDB = async () => {

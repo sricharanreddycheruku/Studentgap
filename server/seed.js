@@ -7,6 +7,8 @@ const Student = require('./models/Student');
 const Session = require('./models/Session');
 const Topic = require('./models/Topic');
 const Message = require('./models/Message');
+const { query } = require('./config/db');
+const { hashPassword } = require('./utils/password');
 
 const teacherSeeds = [
   {
@@ -144,6 +146,10 @@ const seed = async () => {
     await Teacher.deleteMany({});
 
     const teachers = await Teacher.insertMany(teacherSeeds);
+    await Promise.all(teachers.map((teacher) => query(
+      'UPDATE teachers SET password_hash = $1 WHERE id = $2::uuid',
+      [hashPassword('ClassPulse@123'), teacher._id]
+    )));
     await Topic.insertMany(topicSeeds);
     const [sunita, ramesh] = teachers;
 
@@ -256,7 +262,7 @@ const seed = async () => {
       studentId: response.studentId,
       sessionId: session._id,
       type: 'feedback',
-      deliveryMode: 'mock',
+      deliveryMode: 'greenapi',
       status: 'sent',
       content: `Keep going on ${session.topic}. Revise one example and explain the key idea in your own words.`,
       createdAt: new Date(session.date.getTime() + 3600000)

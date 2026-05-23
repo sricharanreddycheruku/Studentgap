@@ -6,22 +6,10 @@ const Teacher = require('../models/Teacher');
 const { previewQuestions, startSession } = require('../controllers/questionController');
 const { analyzeSession } = require('../controllers/analysisController');
 const { resendSessionFeedback } = require('../controllers/feedbackController');
-const { sendAcknowledgement, sendQuestionsToStudent } = require('../services/whatsappService');
-const { addClient, removeClient, broadcast } = require('../services/sseService');
+const { assertWhatsAppReady, sendQuestionsToStudent } = require('../services/whatsappService');
+const { addClient, removeClient } = require('../services/sseService');
 
 const router = express.Router();
-
-const parseAnswers = (answers, fallbackBody = '', count = 3) => {
-  if (Array.isArray(answers)) {
-    return answers.map((answer) => String(answer || '').trim()).filter(Boolean).slice(0, count);
-  }
-
-  return String(fallbackBody || '')
-    .split(/\r?\n|;/)
-    .map((line) => line.replace(/^\s*\d+[.)-]?\s*/, '').trim())
-    .filter(Boolean)
-    .slice(0, count);
-};
 
 router.post('/questions/preview', previewQuestions);
 router.post('/start', startSession);
@@ -60,6 +48,8 @@ router.post('/custom-questions/start', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Add at least one student to this teacher before starting a session.' });
     }
 
+    assertWhatsAppReady();
+
     const session = await Session.create({
       teacherId,
       topic,
@@ -73,10 +63,15 @@ router.post('/custom-questions/start', async (req, res) => {
     });
 
     console.log(`[session] Starting custom question session ${topic} for ${students.length} students.`);
-    await Promise.all(students.map((student) => sendQuestionsToStudent(student, session)));
+    const deliveryLogs = await Promise.all(students.map((student) => sendQuestionsToStudent(student, session)));
+    const sent = deliveryLogs.filter((log) => log.status === 'sent').length;
 
     const populated = await Session.findById(session._id).populate('teacherId', 'name subject grade language');
-    return res.status(201).json({ success: true, session: populated });
+    return res.status(201).json({
+      success: true,
+      session: populated,
+      delivery: { sent, failed: deliveryLogs.length - sent, total: deliveryLogs.length }
+    });
   } catch (error) {
     console.error('[session] Custom start failed:', error.message);
     return res.status(500).json({ success: false, error: error.message });
@@ -91,19 +86,21 @@ router.put('/:sessionId/form-status', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Form status must be "open" or "closed".' });
     }
 
-    const session = await Session.findByIdAndUpdate(
-      req.params.sessionId,
-      { formStatus },
-      { new: true }
-    ).populate('teacherId', 'name subject grade language')
-     .populate('responses.studentId', 'name phone riskLevel confidenceLevel');
+    const session = await Session.findById(req.params.sessionId);
 
     if (!session) {
       return res.status(404).json({ success: false, error: 'Session not found.' });
     }
 
+    session.formStatus = formStatus;
+    await session.save();
+
+    const updated = await Session.findById(session._id)
+      .populate('teacherId', 'name subject grade language')
+      .populate('responses.studentId', 'name phone riskLevel confidenceLevel');
+
     console.log(`[session] Form status updated to ${formStatus} for session ${session.topic}.`);
-    return res.json({ success: true, session });
+    return res.json({ success: true, session: updated });
   } catch (error) {
     console.error('[session] Form status update failed:', error.message);
     return res.status(500).json({ success: false, error: error.message });
@@ -113,74 +110,6 @@ router.put('/:sessionId/form-status', async (req, res) => {
 router.post('/:sessionId/analyze', analyzeSession);
 router.post('/:sessionId/analyse', analyzeSession);
 router.post('/:sessionId/feedback', resendSessionFeedback);
-
-router.post('/:sessionId/responses', async (req, res) => {
-  try {
-    const session = await Session.findById(req.params.sessionId);
-
-    if (!session) {
-      return res.status(404).json({ success: false, error: 'Session not found.' });
-    }
-
-    if (session.status !== 'active') {
-      return res.status(400).json({ success: false, error: 'Responses can only be added to an active session.' });
-    }
-
-    if (session.formStatus === 'closed') {
-      return res.status(400).json({ success: false, error: 'The form for this session is now closed.' });
-    }
-
-    const student = await Student.findById(req.body.studentId);
-
-    if (!student || String(student.teacherId) !== String(session.teacherId)) {
-      return res.status(404).json({ success: false, error: 'Student is not part of this classroom.' });
-    }
-
-    const answers = parseAnswers(req.body.answers, req.body.body, session.questions.length);
-
-    if (!answers.length) {
-      return res.status(400).json({ success: false, error: 'Add at least one student answer.' });
-    }
-
-    const payload = {
-      studentId: student._id,
-      answers,
-      selectedOptions: req.body.selectedOptions || [],
-      score: 0,
-      understood: 'partial',
-      misconception: '',
-      confidenceLevel: 'medium',
-      submittedAt: new Date()
-    };
-    const existing = session.responses.find((response) => String(response.studentId) === String(student._id));
-
-    if (existing) {
-      Object.assign(existing, payload);
-    } else {
-      session.responses.push(payload);
-    }
-
-    await session.save();
-    await sendAcknowledgement(student, session);
-
-    const updated = await Session.findById(session._id)
-      .populate('teacherId', 'name school subject grade language')
-      .populate('responses.studentId', 'name phone riskLevel confidenceLevel');
-    const messages = await Message.find({ sessionId: session._id }).sort({ createdAt: -1 }).limit(50).populate('studentId', 'name');
-
-    broadcast(String(session._id), 'response', {
-      sessionId: String(session._id),
-      responses: updated.responses,
-      responseCount: updated.responses.length
-    });
-
-    console.log(`[sessions] Added mock WhatsApp response from ${student.name} for ${session.topic}.`);
-    return res.status(201).json({ success: true, session: updated, messages });
-  } catch (error) {
-    console.error('[sessions] Add response failed:', error.message);
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 router.get('/:sessionId/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');

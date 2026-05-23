@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, MessageCircleHeart, TrendingUp } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Loader2, MessageCircleHeart, Pencil, TrendingUp, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api/axios';
@@ -17,12 +17,18 @@ const confidenceBadge = {
   low: 'bg-rose-50 text-rose-700 border-rose-200'
 };
 
+const LANGUAGES = ['English', 'Hindi', 'Telugu', 'Marathi', 'Tamil'];
+
 const StudentProgress = () => {
   const { studentId } = useParams();
   const [student, setStudent] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ name: '', phone: '', grade: '', language: 'English' });
 
   useEffect(() => {
     const load = async () => {
@@ -55,6 +61,40 @@ const StudentProgress = () => {
     ? Math.round(student.progressHistory.reduce((sum, e) => sum + (e.score || 0), 0) / sessionCount)
     : 0;
 
+  const openEdit = () => {
+    setEditForm({
+      name: student.name || '',
+      phone: student.phone || '',
+      grade: student.grade || '',
+      language: student.language || 'English'
+    });
+    setEditOpen(true);
+    setError('');
+    setNotice('');
+  };
+
+  const updateEdit = (field, value) => {
+    const nextValue = field === 'phone' ? value.replace(/[^0-9+]/g, '') : value;
+    setEditForm((curr) => ({ ...curr, [field]: nextValue }));
+  };
+
+  const saveEdit = async (event) => {
+    event.preventDefault();
+    try {
+      setSaving(true);
+      setError('');
+      setNotice('');
+      const response = await api.put(`/students/${student._id}`, editForm);
+      setStudent({ ...response.data.student, teacherId: student.teacherId });
+      setEditOpen(false);
+      setNotice(`${response.data.student.name} updated.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center gap-3 panel rounded-xl p-6">
@@ -70,6 +110,38 @@ const StudentProgress = () => {
 
   return (
     <div className="space-y-5">
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={saveEdit} className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-xl font-black text-[#11233f]">Edit student</h2>
+              <button type="button" onClick={() => setEditOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100" title="Close">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid gap-3">
+              <input className="field" value={editForm.name} onChange={(e) => updateEdit('name', e.target.value)} required placeholder="Student name" />
+              <input className="field" value={editForm.phone} onChange={(e) => updateEdit('phone', e.target.value)} required placeholder="919876543210" />
+              <div className="grid grid-cols-2 gap-3">
+                <input className="field" value={editForm.grade} onChange={(e) => updateEdit('grade', e.target.value)} placeholder="Class 6" />
+                <select className="field" value={editForm.language} onChange={(e) => updateEdit('language', e.target.value)}>
+                  {LANGUAGES.map((language) => <option key={language}>{language}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <button type="button" onClick={() => setEditOpen(false)} className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60">
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Pencil size={15} />}
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <section className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline">
@@ -103,6 +175,20 @@ const StudentProgress = () => {
           ))}
         </div>
       </section>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {notice ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800">{notice}</p> : <span />}
+        <button
+          type="button"
+          onClick={openEdit}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"
+        >
+          <Pencil size={15} />
+          Edit student
+        </button>
+      </div>
+
+      {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 font-semibold text-rose-800">{error}</p>}
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">
         <ProgressChart history={student.progressHistory} />

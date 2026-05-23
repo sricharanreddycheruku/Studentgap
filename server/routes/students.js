@@ -1,18 +1,13 @@
 const express = require('express');
 const Student = require('../models/Student');
 const Message = require('../models/Message');
+const Teacher = require('../models/Teacher');
+const { validatePhone } = require('../utils/phone');
 
 const router = express.Router();
 
-const normalizePhone = (value = '') => String(value).replace(/\s+/g, '').replace(/^\+/, '');
-
-const validatePhone = (phone) => {
-  const normalized = normalizePhone(phone);
-  if (!/^\d{7,15}$/.test(normalized)) {
-    return { valid: false, error: 'Phone number must be 7–15 digits (include country code, e.g. 919876543210 for India).' };
-  }
-  return { valid: true, phone: normalized };
-};
+const isDuplicateStudentPhone = (error) =>
+  error.code === '23505' && String(error.constraint || '').includes('students_phone');
 
 router.post('/', async (req, res) => {
   try {
@@ -33,7 +28,7 @@ router.post('/', async (req, res) => {
     console.log(`[students] Created student ${student.name} with phone ${student.phone}.`);
     return res.status(201).json({ success: true, student });
   } catch (error) {
-    const duplicatePhone = error.code === '23505' && String(error.constraint || '').includes('students_phone');
+    const duplicatePhone = isDuplicateStudentPhone(error);
     console.error('[students] Create failed:', error.message);
     return res.status(duplicatePhone ? 409 : 500).json({
       success: false,
@@ -49,20 +44,21 @@ router.put('/:studentId', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Student not found.' });
     }
 
-    if (req.body.phone) {
-      const phoneValidation = validatePhone(req.body.phone);
+    const payload = { ...req.body };
+    if (payload.phone) {
+      const phoneValidation = validatePhone(payload.phone);
       if (!phoneValidation.valid) {
         return res.status(400).json({ success: false, error: phoneValidation.error });
       }
-      req.body.phone = phoneValidation.phone;
+      payload.phone = phoneValidation.phone;
     }
 
-    await Student.updateOne({ _id: student._id }, req.body);
+    await Student.updateOne({ _id: student._id }, payload);
     const updated = await Student.findById(student._id);
-    console.log(`[students] Updated student ${student.name}.`);
+    console.log(`[students] Updated student ${updated.name}.`);
     return res.json({ success: true, student: updated });
   } catch (error) {
-    const duplicatePhone = error.code === '23505' && String(error.constraint || '').includes('students_phone');
+    const duplicatePhone = isDuplicateStudentPhone(error);
     console.error('[students] Update failed:', error.message);
     return res.status(duplicatePhone ? 409 : 500).json({
       success: false,
@@ -104,22 +100,13 @@ router.get('/progress/:studentId', async (req, res) => {
   }
 });
 
-router.get('/:teacherId', async (req, res) => {
-  try {
-    const students = await Student.find({ teacherId: req.params.teacherId }).sort({ name: 1 });
-    return res.json({ success: true, students });
-  } catch (error) {
-    console.error('[students] Teacher roster failed:', error.message);
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 router.get('/by-school/:teacherId', async (req, res) => {
   try {
-    const teacher = await require('../models/Teacher').findById(req.params.teacherId);
+    const teacher = await Teacher.findById(req.params.teacherId);
     if (!teacher) {
       return res.status(404).json({ success: false, error: 'Teacher not found.' });
     }
+
     const students = await Student.find({ teacherId: { $ne: req.params.teacherId } }).sort({ name: 1 });
     return res.json({ success: true, students });
   } catch (error) {
@@ -143,14 +130,19 @@ router.post('/import/:teacherId', async (req, res) => {
     for (const sourceStudent of sourceStudents) {
       try {
         const newStudent = await Student.create({
-          ...sourceStudent,
-          _id: undefined,
+          name: sourceStudent.name,
+          grade: sourceStudent.grade,
           teacherId: targetTeacherId,
-          createdAt: new Date()
+          phone: sourceStudent.phone,
+          language: sourceStudent.language,
+          riskLevel: sourceStudent.riskLevel,
+          confidenceLevel: sourceStudent.confidenceLevel,
+          learningProfile: sourceStudent.learningProfile,
+          progressHistory: sourceStudent.progressHistory
         });
         importedStudents.push(newStudent);
       } catch (err) {
-        console.warn(`Failed to import student ${sourceStudent.name}:`, err.message);
+        console.warn(`[students] Failed to import ${sourceStudent.name}:`, err.message);
       }
     }
 
@@ -158,6 +150,16 @@ router.post('/import/:teacherId', async (req, res) => {
     return res.json({ success: true, importedCount: importedStudents.length, students: importedStudents });
   } catch (error) {
     console.error('[students] Import failed:', error.message);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/:teacherId', async (req, res) => {
+  try {
+    const students = await Student.find({ teacherId: req.params.teacherId }).sort({ name: 1 });
+    return res.json({ success: true, students });
+  } catch (error) {
+    console.error('[students] Teacher roster failed:', error.message);
     return res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import api from '../api/axios';
 import './CreateCustomQuestions.css';
 
 export default function CreateCustomQuestions({ teacherId, onSessionStart, onCancel }) {
@@ -73,20 +74,16 @@ export default function CreateCustomQuestions({ teacherId, onSessionStart, onCan
     setError('');
 
     try {
-      const response = await fetch('/api/sessions/custom-questions/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const response = await api.post('/sessions/custom-questions/start', {
           teacherId,
           topic,
           subject,
           grade,
           language,
           questions
-        })
       });
 
-      const data = await response.json();
+      const data = response.data;
 
       if (!data.success) {
         setError(data.error || 'Failed to start session');

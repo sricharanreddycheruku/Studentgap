@@ -3,7 +3,7 @@ const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 const Topic = require('../models/Topic');
 const { generateQuestions } = require('../services/geminiService');
-const { sendQuestionsToStudent } = require('../services/whatsappService');
+const { assertWhatsAppReady, sendQuestionsToStudent } = require('../services/whatsappService');
 
 const previewQuestions = async (req, res) => {
   try {
@@ -48,6 +48,8 @@ const startSession = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Add at least one student to this teacher before starting a WhatsApp session.' });
     }
 
+    assertWhatsAppReady();
+
     const session = await Session.create({
       teacherId,
       topic,
@@ -66,10 +68,15 @@ const startSession = async (req, res) => {
     );
 
     console.log(`[session] Starting ${topic} session for ${students.length} students.`);
-    await Promise.all(students.map((student) => sendQuestionsToStudent(student, session)));
+    const deliveryLogs = await Promise.all(students.map((student) => sendQuestionsToStudent(student, session)));
+    const sent = deliveryLogs.filter((log) => log.status === 'sent').length;
 
     const populated = await Session.findById(session._id).populate('teacherId', 'name subject grade language');
-    return res.status(201).json({ success: true, session: populated });
+    return res.status(201).json({
+      success: true,
+      session: populated,
+      delivery: { sent, failed: deliveryLogs.length - sent, total: deliveryLogs.length }
+    });
   } catch (error) {
     console.error('[session] Start failed:', error.message);
     return res.status(500).json({ success: false, error: error.message });

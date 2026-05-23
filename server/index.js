@@ -5,6 +5,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const connectDB = require('./config/db');
+const authRoutes = require('./routes/auth');
 const teachersRoutes = require('./routes/teachers');
 const studentsRoutes = require('./routes/students');
 const sessionsRoutes = require('./routes/sessions');
@@ -28,6 +29,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+app.use('/api/auth', authRoutes);
 app.use('/api/teachers', teachersRoutes);
 app.use('/api/students', studentsRoutes);
 app.use('/api/sessions', sessionsRoutes);

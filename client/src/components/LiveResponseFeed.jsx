@@ -32,6 +32,7 @@ const LiveResponseFeed = ({ responses = [], messages = [], isLive = false }) => 
   }, [responses]);
 
   const acknowledgementCount = messages.filter((m) => m.type === 'acknowledgement').length;
+  const replyCount = messages.filter((m) => m.type === 'reply').length;
 
   return (
     <section className="panel rounded-xl p-5 flex flex-col">
@@ -43,7 +44,10 @@ const LiveResponseFeed = ({ responses = [], messages = [], isLive = false }) => 
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600">
             <MessageCircle size={13} />
-            {acknowledgementCount} ack'd
+            {replyCount} replies
+          </span>
+          <span className="hidden items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 sm:inline-flex">
+            {acknowledgementCount} ack sent
           </span>
           {isLive ? (
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700">
@@ -64,7 +68,7 @@ const LiveResponseFeed = ({ responses = [], messages = [], isLive = false }) => 
         {!responses.length && (
           <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center">
             <MessageCircle size={28} className="mx-auto text-slate-200 mb-2" />
-            <p className="text-sm font-semibold text-slate-400">Waiting for WhatsApp replies…</p>
+            <p className="text-sm font-semibold text-slate-400">Waiting for WhatsApp replies...</p>
             <p className="mt-1 text-xs text-slate-300">Responses appear here instantly</p>
           </div>
         )}

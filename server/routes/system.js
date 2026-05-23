@@ -1,4 +1,6 @@
 const express = require('express');
+const { smsReady } = require('../services/smsService');
+const { greenApiReady } = require('../services/whatsappService');
 
 const router = express.Router();
 
@@ -19,15 +21,15 @@ const getBaseUrl = (req) => {
 };
 
 router.get('/status', (req, res) => {
-  const greenApiConfigured = Boolean(
-    process.env.GREENAPI_INSTANCE_ID && process.env.GREENAPI_API_TOKEN
-  );
-  const mockWhatsapp = String(process.env.USE_MOCK_WHATSAPP).toLowerCase() === 'true';
+  const greenApiConfigured = greenApiReady();
   const baseUrl = getBaseUrl(req);
   const webhookPath = '/api/webhook/whatsapp';
   const missing = [
     ['GREENAPI_INSTANCE_ID', process.env.GREENAPI_INSTANCE_ID],
-    ['GREENAPI_API_TOKEN', process.env.GREENAPI_API_TOKEN]
+    ['GREENAPI_API_TOKEN', process.env.GREENAPI_API_TOKEN],
+    ['TWILIO_ACCOUNT_SID', process.env.TWILIO_ACCOUNT_SID],
+    ['TWILIO_AUTH_TOKEN', process.env.TWILIO_AUTH_TOKEN],
+    ['TWILIO_SMS_FROM', process.env.TWILIO_SMS_FROM]
   ].filter(([, v]) => !v).map(([k]) => k);
 
   return res.json({
@@ -36,9 +38,10 @@ router.get('/status', (req, res) => {
       api: 'online',
       database: Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL),
       geminiConfigured: Boolean(process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY),
-      whatsappMode: mockWhatsapp ? 'mock' : 'greenapi',
+      whatsappMode: 'greenapi',
       greenApiConfigured,
-      realWhatsappReady: !mockWhatsapp && greenApiConfigured,
+      realWhatsappReady: greenApiConfigured,
+      smsConfigured: smsReady(),
       missing,
       webhookPath,
       webhookUrl: `${baseUrl}${webhookPath}`

@@ -91,7 +91,7 @@ const WhatsAppSetup = () => {
 
       {!loading && status && (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Signal label="API server" detail="Backend online" ready={status.api === 'online'} />
             <Signal label="Database" detail="PostgreSQL connected" ready={status.database} />
             <Signal
@@ -104,18 +104,14 @@ const WhatsAppSetup = () => {
               detail={status.greenApiConfigured ? 'Instance configured' : 'Credentials missing'}
               ready={status.greenApiConfigured}
             />
+            <Signal
+              label="SMS reset"
+              detail={status.smsConfigured ? 'Twilio SMS ready' : 'Twilio SMS credentials missing'}
+              ready={status.smsConfigured}
+            />
           </section>
 
-          {status.whatsappMode === 'mock' && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <p className="font-black text-amber-800">Mock mode active</p>
-              <p className="mt-1 text-sm text-amber-700">
-                Messages are logged but not sent to real phones. Set <code className="rounded bg-amber-100 px-1">USE_MOCK_WHATSAPP=false</code> and add Green API credentials to enable real delivery.
-              </p>
-            </div>
-          )}
-
-          {status.greenApiConfigured && status.whatsappMode !== 'mock' && (
+          {status.greenApiConfigured && (
             <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <CheckCircle2 size={20} className="text-emerald-600 shrink-0" />
               <div>
@@ -178,9 +174,11 @@ const WhatsAppSetup = () => {
                   <div className="rounded-lg bg-slate-900 p-3 font-mono text-xs text-emerald-300 space-y-1">
                     <p>GREENAPI_INSTANCE_ID=your-instance-id</p>
                     <p>GREENAPI_API_TOKEN=your-api-token</p>
-                    <p>USE_MOCK_WHATSAPP=false</p>
+                    <p>TWILIO_ACCOUNT_SID=your-account-sid</p>
+                    <p>TWILIO_AUTH_TOKEN=your-auth-token</p>
+                    <p>TWILIO_SMS_FROM=+1234567890</p>
                   </div>
-                  <p className="text-slate-500">Find these in your Green API instance dashboard under <strong>API</strong> tab.</p>
+                  <p className="text-slate-500">Find Green API values in your instance dashboard. Twilio SMS values are used only for password-reset codes.</p>
                 </Step>
 
                 <Step num="4" title="Set the webhook URL">

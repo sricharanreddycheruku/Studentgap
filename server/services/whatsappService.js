@@ -1,21 +1,21 @@
 const Message = require('../models/Message');
-
-const isMockMode = () => String(process.env.USE_MOCK_WHATSAPP).toLowerCase() === 'true';
-
-const normalizePhone = (number = '') =>
-  String(number).replace('whatsapp:', '').replace(/\s+/g, '').replace(/^\+/, '');
+const { normalizePhone } = require('../utils/phone');
 
 const persistMessage = async ({ student, sessionId, type, content, deliveryMode, status }) =>
   Message.create({ studentId: student._id, sessionId, type, content, deliveryMode, status });
 
-// Green API — free tier, connects via QR code to your personal WhatsApp
+const greenApiReady = () => Boolean(process.env.GREENAPI_INSTANCE_ID && process.env.GREENAPI_API_TOKEN);
+
+const assertWhatsAppReady = () => {
+  if (!greenApiReady()) {
+    throw new Error('Green API WhatsApp is not configured. Set GREENAPI_INSTANCE_ID and GREENAPI_API_TOKEN.');
+  }
+};
+
 const sendGreenApiMessage = async (toPhone, content) => {
   const instanceId = process.env.GREENAPI_INSTANCE_ID;
   const apiToken = process.env.GREENAPI_API_TOKEN;
-
-  if (!instanceId || !apiToken) {
-    throw new Error('GREENAPI_INSTANCE_ID and GREENAPI_API_TOKEN must be set.');
-  }
+  assertWhatsAppReady();
 
   const to = normalizePhone(toPhone);
   const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
@@ -25,8 +25,8 @@ const sendGreenApiMessage = async (toPhone, content) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chatId: `${to}@c.us`,
-      message: content,
-    }),
+      message: content
+    })
   });
 
   if (!response.ok) {
@@ -38,18 +38,13 @@ const sendGreenApiMessage = async (toPhone, content) => {
 };
 
 const deliverMessage = async ({ student, sessionId, type, content }) => {
-  if (isMockMode()) {
-    console.log(`[whatsapp] Mock ${type} message for ${student.name}: ${content.slice(0, 90)}`);
-    return persistMessage({ student, sessionId, type, content, deliveryMode: 'mock', status: 'sent' });
-  }
-
   try {
     console.log(`[whatsapp] Sending ${type} message to ${student.name}.`);
     await sendGreenApiMessage(student.phone, content);
     return persistMessage({ student, sessionId, type, content, deliveryMode: 'greenapi', status: 'sent' });
   } catch (error) {
     console.error(`[whatsapp] ${type} delivery failed for ${student.name}:`, error.message);
-    return persistMessage({ student, sessionId, type, content, deliveryMode: 'greenapi', status: 'pending' });
+    return persistMessage({ student, sessionId, type, content, deliveryMode: 'greenapi', status: 'failed' });
   }
 };
 
@@ -70,8 +65,8 @@ const formatQuestions = (session) => {
 
 Please reply with your answers:
 ${questionsList}
-For multiple choice questions, reply with the letter (A, B, C, etc.)
-Just reply to this message with your answers!`;
+For multiple choice questions, reply with the letter (A, B, C, etc.).
+Just reply to this message with your answers.`;
 };
 
 const sendQuestionsToStudent = (student, session) =>
@@ -79,7 +74,7 @@ const sendQuestionsToStudent = (student, session) =>
     student,
     sessionId: session._id,
     type: 'question',
-    content: formatQuestions(session).replace('{studentName}', student.name),
+    content: formatQuestions(session).replace('{studentName}', student.name)
   });
 
 const sendFeedbackToStudent = (student, session, content) =>
@@ -90,15 +85,17 @@ const sendAcknowledgement = (student, session) =>
     student,
     sessionId: session._id,
     type: 'acknowledgement',
-    content: 'Thank you for your responses! Your teacher will review them and share feedback soon. Keep it up! 👍',
+    content: 'Thank you for your responses. Your teacher will review them and share personalised feedback soon.'
   });
 
 const sendParentSummary = (student, session, content) =>
   deliverMessage({ student, sessionId: session._id, type: 'feedback', content: `Parent update: ${content}` });
 
 module.exports = {
+  assertWhatsAppReady,
+  greenApiReady,
   sendQuestionsToStudent,
   sendFeedbackToStudent,
   sendAcknowledgement,
-  sendParentSummary,
+  sendParentSummary
 };

@@ -1,4 +1,4 @@
-import { BarChart3, CheckCircle2, Loader2, MessageSquareHeart, RefreshCw, Send, Wifi, WifiOff, X } from 'lucide-react';
+import { BarChart3, CheckCircle2, Loader2, MessageSquareHeart, RefreshCw, Wifi, WifiOff, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api/axios';
@@ -12,19 +12,17 @@ const statusBadge = {
   completed: 'bg-emerald-100 text-emerald-700 border-emerald-200'
 };
 
-const understoodBadge = {
-  yes: 'bg-emerald-100 text-emerald-700',
-  partial: 'bg-amber-100 text-amber-800',
-  no: 'bg-rose-100 text-rose-700'
+const eventSourceUrl = (path) => {
+  const rawBase = import.meta.env.VITE_API_URL || '';
+  const base = rawBase.replace(/\/api\/?$/, '').replace(/\/$/, '');
+  return `${base}/api${path}`;
 };
-
-const understoodLabel = { yes: 'Understood', partial: 'Partial', no: 'Struggling' };
 
 const Toast = ({ message, onClose }) => (
   <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl border border-emerald-200 bg-white px-4 py-3 shadow-2xl shadow-emerald-100 animate-slide-up">
     <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
     <p className="text-sm font-bold text-[#11233f]">{message}</p>
-    <button onClick={onClose} className="ml-1 text-slate-400 hover:text-slate-600">
+    <button onClick={onClose} className="ml-1 text-slate-400 hover:text-slate-600" title="Dismiss">
       <X size={14} />
     </button>
   </div>
@@ -35,12 +33,9 @@ const SessionResults = () => {
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [students, setStudents] = useState([]);
-  const [replyStudentId, setReplyStudentId] = useState('');
-  const [replyBody, setReplyBody] = useState('');
   const [loading, setLoading] = useState(true);
   const [analysing, setAnalysing] = useState(false);
   const [feedbackSending, setFeedbackSending] = useState(false);
-  const [replySending, setReplySending] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [sseConnected, setSseConnected] = useState(false);
@@ -60,7 +55,7 @@ const SessionResults = () => {
       const nextSession = response.data.session;
       const teacherId = nextSession.teacherId?._id || nextSession.teacherId;
       setSession(nextSession);
-      setMessages(response.data.messages);
+      setMessages(response.data.messages || []);
       if (teacherId) {
         const studentsRes = await api.get(`/students/${teacherId}`);
         setStudents(studentsRes.data.students || []);
@@ -76,16 +71,16 @@ const SessionResults = () => {
   useEffect(() => { loadSession(); }, [loadSession]);
 
   useEffect(() => {
-    if (!sessionId) return;
-    const baseUrl = import.meta.env.VITE_API_URL || '';
-    const evtSource = new EventSource(`${baseUrl}/api/sessions/${sessionId}/events`);
+    if (!sessionId) return undefined;
+
+    const evtSource = new EventSource(eventSourceUrl(`/sessions/${sessionId}/events`));
     sseRef.current = evtSource;
 
     evtSource.addEventListener('connected', () => setSseConnected(true));
 
-    evtSource.addEventListener('response', (e) => {
+    evtSource.addEventListener('response', (event) => {
       try {
-        const data = JSON.parse(e.data);
+        const data = JSON.parse(event.data);
         setSession((prev) => {
           if (!prev) return prev;
           const prevCount = prev.responses?.length || 0;
@@ -94,16 +89,19 @@ const SessionResults = () => {
             const newStudent = data.responses[data.responses.length - 1]?.studentId?.name;
             showToast(newStudent ? `New reply from ${newStudent}!` : 'New student response received!');
           }
-          return { ...prev, responses: data.responses };
+          return { ...prev, responses: data.responses || prev.responses };
         });
+        if (Array.isArray(data.messages)) {
+          setMessages(data.messages);
+        }
       } catch (_) {}
     });
 
-    evtSource.addEventListener('analysed', (e) => {
+    evtSource.addEventListener('analysed', (event) => {
       try {
-        const data = JSON.parse(e.data);
-        setSession((prev) => (prev ? { ...prev, ...data.session } : prev));
-        showToast('Analysis complete!');
+        const data = JSON.parse(event.data);
+        setSession(data.session);
+        showToast('Analysis complete.');
       } catch (_) {}
     });
 
@@ -152,52 +150,17 @@ const SessionResults = () => {
     }
   };
 
-  const groups = useMemo(() => session?.groupedStudents || { advanced: [], average: [], needsSupport: [] }, [session]);
-  const insight = session?.classInsight || {};
-  const respondedIds = useMemo(
-    () => new Set((session?.responses || []).map((r) => String(r.studentId?._id || r.studentId))),
+  const groups = useMemo(
+    () => session?.groupedStudents || { advanced: [], average: [], needsSupport: [] },
     [session]
   );
-  const pendingStudents = useMemo(
-    () => students.filter((s) => !respondedIds.has(String(s._id))),
-    [respondedIds, students]
-  );
-
-  useEffect(() => {
-    if (session?.status !== 'active') return;
-    const stillAvail = pendingStudents.some((s) => s._id === replyStudentId);
-    if (!stillAvail) setReplyStudentId(pendingStudents[0]?._id || '');
-  }, [pendingStudents, replyStudentId, session?.status]);
-
-  const submitMockReply = async () => {
-    if (!replyStudentId || !replyBody.trim()) {
-      setError('Choose a student and add at least one answer.');
-      return;
-    }
-    try {
-      setReplySending(true);
-      setError('');
-      setNotice('');
-      const response = await api.post(`/sessions/${sessionId}/responses`, {
-        studentId: replyStudentId,
-        body: replyBody
-      });
-      setSession(response.data.session);
-      setMessages(response.data.messages || []);
-      setReplyBody('');
-      showToast('Student reply captured.');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setReplySending(false);
-    }
-  };
+  const insight = session?.classInsight || {};
 
   if (loading) {
     return (
       <div className="flex items-center gap-3 panel rounded-xl p-6">
         <Loader2 size={18} className="animate-spin text-slate-400" />
-        <span className="font-semibold text-slate-600">Loading session…</span>
+        <span className="font-semibold text-slate-600">Loading session...</span>
       </div>
     );
   }
@@ -208,6 +171,7 @@ const SessionResults = () => {
 
   const responseCount = session.responses?.length || 0;
   const totalStudents = students.length;
+  const pendingCount = totalStudents ? Math.max(totalStudents - responseCount, 0) : 0;
 
   return (
     <div className="space-y-5">
@@ -234,7 +198,7 @@ const SessionResults = () => {
             )}
           </div>
           <p className="mt-1 text-sm text-slate-400">
-            {session.teacherId?.name} · {session.grade} · {session.subject} · {session.language}
+            {session.teacherId?.name} / {session.grade} / {session.subject} / {session.language}
           </p>
         </div>
 
@@ -243,6 +207,7 @@ const SessionResults = () => {
             type="button"
             onClick={loadSession}
             className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+            title="Refresh"
           >
             <RefreshCw size={15} />
           </button>
@@ -253,7 +218,7 @@ const SessionResults = () => {
             className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#11233f] px-4 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
             <BarChart3 size={15} />
-            {analysing ? 'Analysing…' : 'Analyse responses'}
+            {analysing ? 'Analysing...' : 'Analyse responses'}
           </button>
           <button
             type="button"
@@ -262,7 +227,7 @@ const SessionResults = () => {
             className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
           >
             <MessageSquareHeart size={15} />
-            {feedbackSending ? 'Sending…' : 'Send feedback'}
+            {feedbackSending ? 'Sending...' : 'Send feedback'}
           </button>
         </div>
       </section>
@@ -283,76 +248,33 @@ const SessionResults = () => {
           <p className="mt-1 text-sm font-semibold text-slate-500">Responses received</p>
           {totalStudents > 0 && (
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-blue-500 transition-all duration-700"
-                style={{ width: `${Math.min(100, Math.round((responseCount / totalStudents) * 100))}%` }}
-              />
+              <div className="h-full rounded-full bg-blue-500 transition-all duration-700" style={{ width: `${Math.min(100, Math.round((responseCount / totalStudents) * 100))}%` }} />
             </div>
           )}
         </div>
         <div className="panel rounded-xl p-4">
           <p className="text-2xl font-black text-emerald-600">{groups.advanced?.length || 0}</p>
           <p className="mt-1 text-sm font-semibold text-slate-500">Advanced</p>
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-emerald-400 transition-all duration-700"
-              style={{ width: responseCount ? `${Math.round(((groups.advanced?.length || 0) / responseCount) * 100)}%` : '0%' }} />
-          </div>
         </div>
         <div className="panel rounded-xl p-4">
           <p className="text-2xl font-black text-rose-600">{groups.needsSupport?.length || 0}</p>
           <p className="mt-1 text-sm font-semibold text-slate-500">Need support</p>
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-rose-400 transition-all duration-700"
-              style={{ width: responseCount ? `${Math.round(((groups.needsSupport?.length || 0) / responseCount) * 100)}%` : '0%' }} />
-          </div>
         </div>
       </div>
 
       {session.status === 'active' && (
-        <section className="panel rounded-xl p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <section className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-wider text-slate-400">Simulate reply</p>
-              <h2 className="mt-1 text-lg font-black text-[#11233f]">Add test response</h2>
-              <p className="text-sm text-slate-400 mt-0.5">
-                {pendingStudents.length
-                  ? `${pendingStudents.length} of ${totalStudents} students yet to reply`
-                  : 'All students have replied'}
+              <p className="text-xs font-black uppercase tracking-wider text-blue-600">Listening for real replies</p>
+              <p className="mt-1 text-sm font-semibold text-blue-900">
+                Students reply in WhatsApp. Incoming webhook responses appear in the live feed automatically.
               </p>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-1.5 text-sm font-bold text-blue-700">
+            <span className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-sm font-bold text-blue-700">
               <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-              Session active
+              {totalStudents ? `${pendingCount} pending` : 'Session active'}
             </span>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-[1fr_2fr_auto]">
-            <label className="grid gap-1.5 text-sm font-bold text-slate-600">
-              Student
-              <select className="field" value={replyStudentId} onChange={(e) => setReplyStudentId(e.target.value)}>
-                {!pendingStudents.length && <option value="">All replied ✓</option>}
-                {pendingStudents.map((s) => (
-                  <option key={s._id} value={s._id}>{s.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5 text-sm font-bold text-slate-600">
-              Answers (one per line)
-              <textarea
-                className="field min-h-20 resize-y"
-                value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
-                placeholder={`1. First answer\n2. Second answer\n3. Third answer`}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={submitMockReply}
-              disabled={replySending || !replyStudentId || !replyBody.trim()}
-              className="inline-flex min-h-11 items-center justify-center gap-2 self-end rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
-            >
-              {replySending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-              Save
-            </button>
           </div>
         </section>
       )}
@@ -381,11 +303,7 @@ const SessionResults = () => {
           </div>
         </section>
 
-        <LiveResponseFeed
-          responses={session.responses}
-          messages={messages}
-          isLive={sseConnected}
-        />
+        <LiveResponseFeed responses={session.responses} messages={messages} isLive={sseConnected} />
       </section>
 
       {responseCount > 0 && (
@@ -408,9 +326,7 @@ const SessionResults = () => {
                   </span>
                 </div>
                 <div className="space-y-1.5">
-                  {!groups[key]?.length && (
-                    <p className="text-xs text-slate-400 py-2">Analyse responses to populate.</p>
-                  )}
+                  {!groups[key]?.length && <p className="text-xs text-slate-400 py-2">Analyse responses to populate.</p>}
                   {(groups[key] || []).map((student) => (
                     <Link
                       key={student.studentId || student._id}

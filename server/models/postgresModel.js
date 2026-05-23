@@ -78,6 +78,19 @@ const buildWhere = (filter = {}, columns, params = []) => {
       return;
     }
 
+    if (isPlainObject(rawValue) && Object.prototype.hasOwnProperty.call(rawValue, '$ne')) {
+      const value = asId(rawValue.$ne);
+
+      if (isUuidColumn(column) && !isUuidValue(value)) {
+        return;
+      }
+
+      params.push(value);
+      const cast = isUuidColumn(column) ? '::uuid' : '';
+      clauses.push(`${column} <> $${params.length}${cast}`);
+      return;
+    }
+
     const value = asId(rawValue);
 
     if (isUuidColumn(column) && !isUuidValue(value)) {
@@ -189,6 +202,17 @@ class PostgresModel {
     return new QueryBuilder(this, 'one', { _id: id });
   }
 
+  async findByIdAndUpdate(id, update = {}, options = {}) {
+    const result = await this.updateOne({ _id: id }, update);
+
+    if (!result.matchedCount && !result.upsertedId) {
+      return null;
+    }
+
+    const nextId = result.upsertedId || id;
+    return options.new === false ? null : this.findById(nextId);
+  }
+
   async create(input) {
     const data = this._prepare({ _id: randomUUID(), ...this.defaults(), ...input });
     const keys = Object.keys(this.columns).filter((key) => data[key] !== undefined);
@@ -249,6 +273,11 @@ class PostgresModel {
         params.push(this._dbValue(key, data[key]));
         return `${this.columns[key]} = $${params.length}${this.jsonColumns.has(key) ? '::jsonb' : ''}`;
       });
+
+      if (!assignments.length) {
+        return { matchedCount: 1, modifiedCount: 0, upsertedId: null };
+      }
+
       params.push(id);
       await query(
         `UPDATE ${this.table} SET ${assignments.join(', ')} WHERE id = $${params.length}::uuid`,
@@ -275,6 +304,10 @@ class PostgresModel {
       params.push(this._dbValue(key, data[key]));
       return `${this.columns[key]} = $${params.length}${this.jsonColumns.has(key) ? '::jsonb' : ''}`;
     });
+
+    if (!assignments.length) {
+      return doc;
+    }
 
     params.push(id);
     const result = await query(
