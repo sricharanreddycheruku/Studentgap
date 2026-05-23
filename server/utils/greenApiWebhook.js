@@ -1,6 +1,7 @@
 const { normalizePhone } = require('./phone');
 
 const INCOMING_WEBHOOK = 'incomingMessageReceived';
+const PHONE_SENT_WEBHOOK = 'outgoingMessageReceived';
 const SUPPORTED_MESSAGE_TYPES = new Set(['textMessage', 'extendedTextMessage', 'quotedMessage']);
 
 const cleanChatId = (value = '') => String(value || '').trim();
@@ -23,12 +24,22 @@ const getSenderPhone = (senderData = {}) => {
   return normalizePhone(privateChatId || senderData.sender || senderData.chatId || '');
 };
 
+const getReplyPhone = (payload = {}) => {
+  const senderData = payload.senderData || {};
+
+  if (payload.typeWebhook === PHONE_SENT_WEBHOOK) {
+    return normalizePhone(senderData.chatId || senderData.sender || '');
+  }
+
+  return getSenderPhone(senderData);
+};
+
 const parseGreenApiReply = (payload = {}) => {
   const typeWebhook = payload.typeWebhook;
   const messageData = payload.messageData || {};
   const typeMessage = messageData.typeMessage;
 
-  if (typeWebhook !== INCOMING_WEBHOOK) {
+  if (![INCOMING_WEBHOOK, PHONE_SENT_WEBHOOK].includes(typeWebhook)) {
     return {
       accepted: false,
       reason: `ignored webhook type ${typeWebhook || 'unknown'}`
@@ -42,7 +53,7 @@ const parseGreenApiReply = (payload = {}) => {
     };
   }
 
-  const phone = getSenderPhone(payload.senderData || {});
+  const phone = getReplyPhone(payload);
   const body = getIncomingText(messageData);
 
   if (!phone) {
@@ -57,14 +68,16 @@ const parseGreenApiReply = (payload = {}) => {
     accepted: true,
     phone,
     body,
-    senderName: payload.senderData?.senderName || payload.senderData?.senderContactName || '',
+    senderName: payload.senderData?.chatName || payload.senderData?.senderName || payload.senderData?.senderContactName || '',
     idMessage: payload.idMessage || '',
+    source: typeWebhook === PHONE_SENT_WEBHOOK ? 'phone' : 'incoming',
     typeMessage
   };
 };
 
 module.exports = {
   getIncomingText,
+  getReplyPhone,
   getSenderPhone,
   parseGreenApiReply
 };

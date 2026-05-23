@@ -62,6 +62,12 @@ To replay a local Green API-style reply against your running server:
 npm run replay:webhook -- 919876543210 "A B C"
 ```
 
+To replay the "message sent from phone" webhook shape:
+
+```bash
+npm run replay:webhook -- --phone-sent 919876543210 "A B C"
+```
+
 ## 5. Seed demo data
 
 ```bash

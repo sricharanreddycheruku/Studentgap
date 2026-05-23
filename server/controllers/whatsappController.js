@@ -6,6 +6,9 @@ const { sendAcknowledgement } = require('../services/whatsappService');
 const { broadcast } = require('../services/sseService');
 const { parseGreenApiReply } = require('../utils/greenApiWebhook');
 
+const DEBUG_WEBHOOKS = String(process.env.DEBUG_WEBHOOKS || '').toLowerCase() === 'true';
+const IMPORTANT_IGNORED_WEBHOOKS = new Set(['quotaExceeded']);
+
 const splitAnswers = (body = '', count = 3) => {
   const lines = body
     .split(/\r?\n|;/)
@@ -112,11 +115,16 @@ const processWhatsappWebhook = async (rawPayload = {}) => {
   const parsedWebhook = parseGreenApiReply(rawPayload);
 
   if (!parsedWebhook.accepted) {
-    console.log(`[webhook] ${parsedWebhook.reason}.`);
+    const typeWebhook = rawPayload?.typeWebhook || 'unknown';
+    if (IMPORTANT_IGNORED_WEBHOOKS.has(typeWebhook)) {
+      console.warn('[webhook] Green API quota exceeded. Some WhatsApp messages may not be delivered until quota resets or plan is upgraded.');
+    } else if (DEBUG_WEBHOOKS) {
+      console.log(`[webhook] ${parsedWebhook.reason}.`);
+    }
     return { stored: false, reason: parsedWebhook.reason };
   }
 
-  const { phone, body, senderName, idMessage } = parsedWebhook;
+  const { phone, body, senderName, idMessage, source } = parsedWebhook;
   const student = await findOrCreateStudent(phone, senderName);
   if (!student) {
     return { stored: false, reason: `student ${phone} could not be resolved` };
@@ -175,7 +183,7 @@ const processWhatsappWebhook = async (rawPayload = {}) => {
   await broadcastSessionSnapshot(session._id);
   sendAcknowledgementAndRefresh(student, session);
 
-  console.log(`[webhook] Stored reply from ${student.name} for ${session.topic}${idMessage ? ` (${idMessage})` : ''}.`);
+  console.log(`[webhook] Stored ${source === 'phone' ? 'phone-sent' : 'incoming'} reply from ${student.name} for ${session.topic}${idMessage ? ` (${idMessage})` : ''}.`);
   return {
     stored: true,
     sessionId: String(session._id),
