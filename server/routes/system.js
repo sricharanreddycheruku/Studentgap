@@ -4,7 +4,30 @@ const { greenApiReady } = require('../services/whatsappService');
 
 const router = express.Router();
 
-const getBaseUrl = (req) => {
+const detectNgrokUrl = async () => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 700);
+
+  try {
+    const response = await fetch(process.env.NGROK_API_URL || 'http://127.0.0.1:4040/api/tunnels', {
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      return '';
+    }
+
+    const payload = await response.json();
+    const tunnel = (payload.tunnels || []).find((item) => item.proto === 'https' && item.public_url);
+    return tunnel?.public_url || '';
+  } catch (_) {
+    return '';
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const getBaseUrl = async (req) => {
   if (process.env.PUBLIC_WEBHOOK_URL) {
     return process.env.PUBLIC_WEBHOOK_URL.replace(/\/$/, '');
   }
@@ -15,14 +38,20 @@ const getBaseUrl = (req) => {
     return `https://${domain}`;
   }
 
+  const ngrokUrl = await detectNgrokUrl();
+  if (ngrokUrl) {
+    return ngrokUrl.replace(/\/$/, '');
+  }
+
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
   const proto = req.headers['x-forwarded-proto'] || 'http';
   return `${proto}://${host}`;
 };
 
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   const greenApiConfigured = greenApiReady();
-  const baseUrl = getBaseUrl(req);
+  const smsConfigured = smsReady();
+  const baseUrl = await getBaseUrl(req);
   const webhookPath = '/api/webhook/whatsapp';
   const missing = [
     ['GREENAPI_INSTANCE_ID', process.env.GREENAPI_INSTANCE_ID],
@@ -41,7 +70,9 @@ router.get('/status', (req, res) => {
       whatsappMode: 'greenapi',
       greenApiConfigured,
       realWhatsappReady: greenApiConfigured,
-      smsConfigured: smsReady(),
+      smsConfigured,
+      passwordResetConfigured: smsConfigured || greenApiConfigured,
+      passwordResetChannel: smsConfigured ? 'sms' : greenApiConfigured ? 'whatsapp' : 'none',
       missing,
       webhookPath,
       webhookUrl: `${baseUrl}${webhookPath}`

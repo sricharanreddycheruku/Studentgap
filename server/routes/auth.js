@@ -128,13 +128,14 @@ router.post('/forgot-code', async (req, res) => {
       [randomUUID(), auth.id, phoneValidation.phone, hashCode(code), expiresAt]
     );
 
-    await sendSms(
+    const delivery = await sendSms(
       phoneValidation.phone,
       `Your ClassPulse password reset code is ${code}. It expires in ${RESET_TTL_MINUTES} minutes.`
     );
 
-    console.log(`[auth] Sent reset code to ${phoneValidation.phone}.`);
-    return res.json({ success: true, message: 'Reset code sent by SMS.' });
+    const channel = delivery.channel === 'sms' ? 'SMS' : 'WhatsApp';
+    console.log(`[auth] Sent reset code to ${phoneValidation.phone} by ${channel}.`);
+    return res.json({ success: true, message: `Reset code sent by ${channel}.`, channel: delivery.channel });
   } catch (error) {
     console.error('[auth] Forgot code failed:', error.message);
     return res.status(500).json({ success: false, error: error.message });

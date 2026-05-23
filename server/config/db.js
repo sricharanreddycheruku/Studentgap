@@ -84,6 +84,12 @@ ALTER TABLE students ADD COLUMN IF NOT EXISTS progress_history JSONB NOT NULL DE
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS form_status TEXT NOT NULL DEFAULT 'open';
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS grouped_students JSONB NOT NULL DEFAULT '{"advanced":[],"average":[],"needsSupport":[]}'::jsonb;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS class_insight JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_delivery_mode_check;
+ALTER TABLE messages ADD CONSTRAINT messages_delivery_mode_check CHECK (delivery_mode IN ('greenapi', 'twilio', 'mock', 'system'));
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+ALTER TABLE messages ADD CONSTRAINT messages_type_check CHECK (type IN ('question', 'feedback', 'reply', 'acknowledgement'));
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_status_check;
+ALTER TABLE messages ADD CONSTRAINT messages_status_check CHECK (status IN ('sent', 'failed', 'received', 'pending'));
 `;
 
 const indexes = `

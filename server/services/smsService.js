@@ -1,5 +1,6 @@
 const twilio = require('twilio');
 const { toE164 } = require('../utils/phone');
+const { greenApiReady, sendWhatsAppText } = require('./whatsappService');
 
 const smsReady = () => Boolean(
   process.env.TWILIO_ACCOUNT_SID
@@ -9,7 +10,12 @@ const smsReady = () => Boolean(
 
 const sendSms = async (phone, body) => {
   if (!smsReady()) {
-    throw new Error('Twilio SMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_SMS_FROM.');
+    if (!greenApiReady()) {
+      throw new Error('Password reset delivery is not configured. Set Twilio SMS credentials or Green API WhatsApp credentials.');
+    }
+
+    await sendWhatsAppText(phone, body);
+    return { channel: 'whatsapp' };
   }
 
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -18,6 +24,7 @@ const sendSms = async (phone, body) => {
     from: process.env.TWILIO_SMS_FROM,
     body
   });
+  return { channel: 'sms' };
 };
 
 module.exports = {

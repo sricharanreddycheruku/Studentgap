@@ -12,7 +12,7 @@ const assertWhatsAppReady = () => {
   }
 };
 
-const sendGreenApiMessage = async (toPhone, content) => {
+const sendWhatsAppText = async (toPhone, content) => {
   const instanceId = process.env.GREENAPI_INSTANCE_ID;
   const apiToken = process.env.GREENAPI_API_TOKEN;
   assertWhatsAppReady();
@@ -40,7 +40,7 @@ const sendGreenApiMessage = async (toPhone, content) => {
 const deliverMessage = async ({ student, sessionId, type, content }) => {
   try {
     console.log(`[whatsapp] Sending ${type} message to ${student.name}.`);
-    await sendGreenApiMessage(student.phone, content);
+    await sendWhatsAppText(student.phone, content);
     return persistMessage({ student, sessionId, type, content, deliveryMode: 'greenapi', status: 'sent' });
   } catch (error) {
     console.error(`[whatsapp] ${type} delivery failed for ${student.name}:`, error.message);
@@ -94,6 +94,7 @@ const sendParentSummary = (student, session, content) =>
 module.exports = {
   assertWhatsAppReady,
   greenApiReady,
+  sendWhatsAppText,
   sendQuestionsToStudent,
   sendFeedbackToStudent,
   sendAcknowledgement,

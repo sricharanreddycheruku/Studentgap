@@ -81,7 +81,7 @@ const Roster = () => {
       const stripped = value.replace(/[^0-9+]/g, '');
       const digits = stripped.replace(/^\+/, '');
       setPhoneError(digits.length > 0 && (digits.length < 7 || digits.length > 15)
-        ? 'Enter 7–15 digits with country code (e.g. 919876543210 for India)'
+        ? 'Enter 10 local digits or 7-15 digits with country code'
         : '');
       setForm((curr) => ({ ...curr, [field]: stripped }));
       return;
@@ -94,7 +94,7 @@ const Roster = () => {
       const stripped = value.replace(/[^0-9+]/g, '');
       const digits = stripped.replace(/^\+/, '');
       setEditPhoneError(digits.length > 0 && (digits.length < 7 || digits.length > 15)
-        ? 'Enter 7–15 digits with country code (e.g. 919876543210 for India)'
+        ? 'Enter 10 local digits or 7-15 digits with country code'
         : '');
       setEditForm((curr) => ({ ...curr, [field]: stripped }));
       return;
@@ -192,7 +192,7 @@ const Roster = () => {
                 <input className="field" value={editForm.phone} onChange={(e) => updateEditForm('phone', e.target.value)} required placeholder="919876543210" />
                 {editPhoneError
                   ? <span className="text-xs font-semibold text-rose-600">{editPhoneError}</span>
-                  : <span className="text-xs text-slate-400">Include country code · India: 91 + 10 digits</span>}
+                  : <span className="text-xs text-slate-400">10 local digits are saved as India (+91) by default</span>}
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="grid gap-1.5 text-sm font-bold text-slate-600">
@@ -289,7 +289,7 @@ const Roster = () => {
               />
               {phoneError
                 ? <span className="text-xs font-semibold text-rose-600">{phoneError}</span>
-                : <span className="text-xs text-slate-400">Include country code · India: 91 + 10 digits</span>
+                : <span className="text-xs text-slate-400">10 local digits are saved as India (+91) by default</span>
               }
             </label>
 

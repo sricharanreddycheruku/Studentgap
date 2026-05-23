@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import api from '../api/axios';
 import './SessionController.css';
 
 export default function SessionController({ session, onStatusChange, onRefresh }) {
@@ -12,13 +13,8 @@ export default function SessionController({ session, onStatusChange, onRefresh }
     setError('');
 
     try {
-      const response = await fetch(`/api/sessions/${session._id}/form-status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ formStatus: newStatus })
-      });
-
-      const data = await response.json();
+      const response = await api.put(`/sessions/${session._id}/form-status`, { formStatus: newStatus });
+      const data = response.data;
 
       if (!data.success) {
         setError(data.error || 'Failed to update form status');

@@ -85,9 +85,9 @@ const Login = () => {
       setLoading(true);
       setError('');
       setNotice('');
-      await api.post('/auth/forgot-code', { phone: reset.phone });
+      const response = await api.post('/auth/forgot-code', { phone: reset.phone });
       setResetCodeSent(true);
-      setNotice('SMS code sent. Enter it below with your new password.');
+      setNotice(`${response.data.message || 'Reset code sent.'} Enter it below with your new password.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -130,7 +130,7 @@ const Login = () => {
         </div>
         <div className="mt-8 space-y-4 text-sm leading-6 text-slate-300">
           <p>Use your registered mobile number and password to enter the teacher workspace.</p>
-          <p>Forgot-password codes are sent by real SMS through Twilio when SMS credentials are configured.</p>
+          <p>Forgot-password codes use Twilio SMS when configured, with WhatsApp fallback for local testing.</p>
         </div>
         <div className="mt-8 grid gap-3">
           {[

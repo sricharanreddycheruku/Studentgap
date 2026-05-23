@@ -105,9 +105,13 @@ const WhatsAppSetup = () => {
               ready={status.greenApiConfigured}
             />
             <Signal
-              label="SMS reset"
-              detail={status.smsConfigured ? 'Twilio SMS ready' : 'Twilio SMS credentials missing'}
-              ready={status.smsConfigured}
+              label="Password reset"
+              detail={status.passwordResetChannel === 'sms'
+                ? 'Twilio SMS ready'
+                : status.passwordResetChannel === 'whatsapp'
+                  ? 'WhatsApp fallback ready'
+                  : 'Twilio or Green API credentials missing'}
+              ready={status.passwordResetConfigured}
             />
           </section>
 

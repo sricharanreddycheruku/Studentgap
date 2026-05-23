@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import api from '../api/axios';
 import './StudentInfoManager.css';
 
 export default function StudentInfoManager({ students, teacherId, onClose }) {
@@ -16,9 +17,8 @@ export default function StudentInfoManager({ students, teacherId, onClose }) {
   };
 
   const handleChange = (field, value) => {
-    // Validate phone number
     if (field === 'phone') {
-      value = String(value).replace(/[^0-9]/g, '').slice(0, 10);
+      value = String(value).replace(/[^0-9+]/g, '').slice(0, 15);
     }
 
     setEditData({
@@ -38,8 +38,9 @@ export default function StudentInfoManager({ students, teacherId, onClose }) {
       return;
     }
 
-    if (!/^\d{1,10}$/.test(editData.phone)) {
-      setError('Phone must be 1-10 digits only');
+    const digits = String(editData.phone).replace(/^\+/, '');
+    if (!/^\d{10}$/.test(digits) && !/^\d{7,15}$/.test(digits)) {
+      setError('Enter 10 local digits or include country code, e.g. 9876543210 or 919876543210');
       return;
     }
 
@@ -48,18 +49,14 @@ export default function StudentInfoManager({ students, teacherId, onClose }) {
     setSuccess('');
 
     try {
-      const response = await fetch(`/api/students/${editData._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editData.name,
-          phone: editData.phone,
-          grade: editData.grade,
-          language: editData.language
-        })
+      const response = await api.put(`/students/${editData._id}`, {
+        name: editData.name,
+        phone: editData.phone,
+        grade: editData.grade,
+        language: editData.language
       });
 
-      const data = await response.json();
+      const data = response.data;
 
       if (!data.success) {
         setError(data.error || 'Failed to update student');
@@ -124,15 +121,15 @@ export default function StudentInfoManager({ students, teacherId, onClose }) {
             </div>
 
             <div className="form-group">
-              <label>Phone Number (10 digits max)</label>
+              <label>WhatsApp Number</label>
               <input
                 type="tel"
                 value={editData.phone || ''}
                 onChange={(e) => handleChange('phone', e.target.value)}
-                placeholder="Enter phone number"
-                maxLength="10"
+                placeholder="9876543210 or 919876543210"
+                maxLength="15"
               />
-              <small>Only digits allowed, maximum 10 digits</small>
+              <small>10 local digits are saved with the default country code</small>
             </div>
 
             <div className="form-group">

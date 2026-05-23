@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from '../api/axios';
 import './StudentImporter.css';
 
 export default function StudentImporter({ teacherId, onClose, onImportComplete }) {
@@ -12,8 +13,8 @@ export default function StudentImporter({ teacherId, onClose, onImportComplete }
   useEffect(() => {
     const fetchAvailableStudents = async () => {
       try {
-        const response = await fetch(`/api/students/by-school/${teacherId}`);
-        const data = await response.json();
+        const response = await api.get(`/students/by-school/${teacherId}`);
+        const data = response.data;
 
         if (data.success) {
           setAvailableStudents(data.students || []);
@@ -56,13 +57,8 @@ export default function StudentImporter({ teacherId, onClose, onImportComplete }
     setError('');
 
     try {
-      const response = await fetch(`/api/students/import/${teacherId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceStudentIds: selectedStudents })
-      });
-
-      const data = await response.json();
+      const response = await api.post(`/students/import/${teacherId}`, { sourceStudentIds: selectedStudents });
+      const data = response.data;
 
       if (!data.success) {
         setError(data.error || 'Failed to import students');
